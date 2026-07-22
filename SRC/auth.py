@@ -57,6 +57,24 @@ def criar_token(id_usuario_interno: int, email: str, nivel_acesso: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
+def criar_token_cliente(id_cliente: int, email: str) -> str:
+    """
+    Gera um JWT para um Cliente logado (área 'Minha conta' do site
+    público) — mesma ideia de criar_token(), mas com "tipo": "cliente"
+    no payload, pra distinguir de um token de Usuario_Interno (equipe
+    interna) e nenhum dos dois conseguir logar como o outro.
+    """
+    agora = datetime.datetime.now(datetime.timezone.utc)
+    payload = {
+        "sub": str(id_cliente),
+        "email": email,
+        "tipo": "cliente",
+        "iat": agora,
+        "exp": agora + datetime.timedelta(hours=JWT_EXPIRA_HORAS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
 def decodificar_token(token: str) -> Optional[dict]:
     """Valida um JWT e devolve seu payload, ou None se inválido/expirado."""
     try:

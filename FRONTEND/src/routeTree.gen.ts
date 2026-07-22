@@ -14,7 +14,9 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PainelIndexRouteImport } from './routes/painel/index'
 import { Route as PacotesIndexRouteImport } from './routes/pacotes/index'
+import { Route as ContaIndexRouteImport } from './routes/conta/index'
 import { Route as PacotesIdRouteImport } from './routes/pacotes/$id'
+import { Route as ContaEntrarRouteImport } from './routes/conta/entrar'
 import { Route as PainelViagensIndexRouteImport } from './routes/painel/viagens/index'
 import { Route as PainelPropostasIndexRouteImport } from './routes/painel/propostas/index'
 import { Route as PainelPacotesIndexRouteImport } from './routes/painel/pacotes/index'
@@ -48,9 +50,19 @@ const PacotesIndexRoute = PacotesIndexRouteImport.update({
   path: '/pacotes/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContaIndexRoute = ContaIndexRouteImport.update({
+  id: '/conta/',
+  path: '/conta/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PacotesIdRoute = PacotesIdRouteImport.update({
   id: '/pacotes/$id',
   path: '/pacotes/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContaEntrarRoute = ContaEntrarRouteImport.update({
+  id: '/conta/entrar',
+  path: '/conta/entrar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PainelViagensIndexRoute = PainelViagensIndexRouteImport.update({
@@ -93,7 +105,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/painel': typeof PainelRouteWithChildren
+  '/conta/entrar': typeof ContaEntrarRoute
   '/pacotes/$id': typeof PacotesIdRoute
+  '/conta/': typeof ContaIndexRoute
   '/pacotes/': typeof PacotesIndexRoute
   '/painel/': typeof PainelIndexRoute
   '/painel/clientes/$id': typeof PainelClientesIdRoute
@@ -107,7 +121,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/conta/entrar': typeof ContaEntrarRoute
   '/pacotes/$id': typeof PacotesIdRoute
+  '/conta': typeof ContaIndexRoute
   '/pacotes': typeof PacotesIndexRoute
   '/painel': typeof PainelIndexRoute
   '/painel/clientes/$id': typeof PainelClientesIdRoute
@@ -123,7 +139,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/painel': typeof PainelRouteWithChildren
+  '/conta/entrar': typeof ContaEntrarRoute
   '/pacotes/$id': typeof PacotesIdRoute
+  '/conta/': typeof ContaIndexRoute
   '/pacotes/': typeof PacotesIndexRoute
   '/painel/': typeof PainelIndexRoute
   '/painel/clientes/$id': typeof PainelClientesIdRoute
@@ -140,7 +158,9 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/painel'
+    | '/conta/entrar'
     | '/pacotes/$id'
+    | '/conta/'
     | '/pacotes/'
     | '/painel/'
     | '/painel/clientes/$id'
@@ -154,7 +174,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/conta/entrar'
     | '/pacotes/$id'
+    | '/conta'
     | '/pacotes'
     | '/painel'
     | '/painel/clientes/$id'
@@ -169,7 +191,9 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/painel'
+    | '/conta/entrar'
     | '/pacotes/$id'
+    | '/conta/'
     | '/pacotes/'
     | '/painel/'
     | '/painel/clientes/$id'
@@ -185,7 +209,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   PainelRoute: typeof PainelRouteWithChildren
+  ContaEntrarRoute: typeof ContaEntrarRoute
   PacotesIdRoute: typeof PacotesIdRoute
+  ContaIndexRoute: typeof ContaIndexRoute
   PacotesIndexRoute: typeof PacotesIndexRoute
 }
 
@@ -226,11 +252,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PacotesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/conta/': {
+      id: '/conta/'
+      path: '/conta'
+      fullPath: '/conta/'
+      preLoaderRoute: typeof ContaIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pacotes/$id': {
       id: '/pacotes/$id'
       path: '/pacotes/$id'
       fullPath: '/pacotes/$id'
       preLoaderRoute: typeof PacotesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conta/entrar': {
+      id: '/conta/entrar'
+      path: '/conta/entrar'
+      fullPath: '/conta/entrar'
+      preLoaderRoute: typeof ContaEntrarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/painel/viagens/': {
@@ -314,7 +354,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   PainelRoute: PainelRouteWithChildren,
+  ContaEntrarRoute: ContaEntrarRoute,
   PacotesIdRoute: PacotesIdRoute,
+  ContaIndexRoute: ContaIndexRoute,
   PacotesIndexRoute: PacotesIndexRoute,
 }
 export const routeTree = rootRouteImport

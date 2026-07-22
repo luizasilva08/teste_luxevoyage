@@ -56,3 +56,23 @@ def deletar_cliente(id_cliente):
     """Remove um registro de Cliente pelo id."""
     query = f"DELETE FROM {TABLE} WHERE {PK} = %s"
     return execute_query(query, (id_cliente,), commit=True)
+
+
+# ---------------------------------------------------------------------------
+# Funções específicas de autenticação (login) — mesmo padrão de
+# crm/usuario_interno.py. Ficam separadas do CRUD genérico de propósito:
+# senha_hash nunca entra em REGISTRO["Clientes"]["Cliente"]["cols"], então
+# o CRUD genérico da API (/api/Clientes/Cliente) nunca lê nem grava esse
+# campo — só as rotas dedicadas de autenticação do cliente.
+# ---------------------------------------------------------------------------
+
+def buscar_cliente_por_email(email_criptografado):
+    """Retorna um único registro de Cliente pelo e-mail, ou None."""
+    query = f"SELECT * FROM {TABLE} WHERE email_criptografado = %s"
+    return execute_query(query, (email_criptografado,), fetch="one")
+
+
+def definir_senha(id_cliente, senha_hash):
+    """Grava (ou substitui) o hash de senha de um cliente já existente."""
+    query = f"UPDATE {TABLE} SET senha_hash = %s WHERE {PK} = %s"
+    return execute_query(query, (senha_hash, id_cliente), commit=True)

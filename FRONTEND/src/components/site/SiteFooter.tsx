@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { Facebook, Instagram, Twitter, Linkedin } from "lucide-react";
 
 function FooterCol({ title, items }: { title: string; items: string[] }) {
@@ -56,7 +57,12 @@ export function SiteFooter() {
         </div>
         <div className="mt-12 flex flex-col items-start justify-between gap-2 border-t border-navy-foreground/10 pt-6 text-xs text-navy-foreground/60 md:flex-row md:items-center">
           <p>© 2026 Luxe Voyage. Todos os direitos reservados.</p>
-          <p>CNPJ 00.000.000/0001-00 · CADASTUR 00.000.000-0</p>
+          <div className="flex items-center gap-4">
+            <p>CNPJ 00.000.000/0001-00 · CADASTUR 00.000.000-0</p>
+            <Link to="/auth" className="hover:text-gold">
+              Acesso da equipe
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
