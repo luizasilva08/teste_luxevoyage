@@ -140,18 +140,25 @@ export type OportunidadeConta = {
   status_cotacao: string | null;
 };
 
+export type ParceiroConta = {
+  id_parceiro: number;
+  razao_social: string;
+  nome_servico: string;
+  categoria_servico: string;
+};
+
 export type ViagemConta = {
   id_viagem: number;
   status_viagem: string;
   data_embarque: string;
   data_retorno: string;
   id_contrato: number;
+  id_cotacao: number;
   nome_pacote: string | null;
   status_contrato: string;
   parcelas_pagas: number;
   parcelas_total: number;
-  avaliacao_nota: number | null;
-  avaliacao_comentario: string | null;
+  parceiros: ParceiroConta[];
 };
 
 export type PagamentoConta = {
@@ -192,8 +199,8 @@ export function enviarMensagemConta(idOportunidade: number, mensagem: string) {
   });
 }
 
-export function avaliarViagemConta(idViagem: number, nota: number, comentario?: string) {
-  return apiFetchCliente(`/api/conta/viagens/${idViagem}/avaliacao`, {
+export function avaliarParceiroConta(idParceiro: number, nota: number, comentario?: string) {
+  return apiFetchCliente(`/api/conta/parceiros/${idParceiro}/avaliacao`, {
     method: "POST",
     body: { nota, comentario },
   });

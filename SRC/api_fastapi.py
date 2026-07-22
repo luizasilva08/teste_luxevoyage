@@ -57,7 +57,8 @@ from crm import usuario_interno          # noqa: E402
 from clientes import cliente as cliente_mod          # noqa: E402
 from clientes import interesse_cliente               # noqa: E402
 from crm import oportunidade_crm, historico_interacao  # noqa: E402
-from operacional import pagamento_contrato, avaliacao_viagem  # noqa: E402
+from operacional import pagamento_contrato          # noqa: E402
+from parceiros import avaliacao_parceiro             # noqa: E402
 from auth import (                       # noqa: E402
     checar_senha,
     hash_senha,
@@ -819,22 +820,34 @@ def api_conta_resumo(cliente_atual: dict = Depends(obter_cliente_atual)):
 
     viagens = _chamar(execute_query, """
         SELECT v.id_viagem, v.status_viagem, v.data_embarque, v.data_retorno, v.id_contrato,
-               pa.nome_pacote, cd.status AS status_contrato,
+               co.id_cotacao, pa.nome_pacote, cd.status AS status_contrato,
                (SELECT COUNT(*) FROM Pagamento_Contrato pg
                  WHERE pg.id_contrato = v.id_contrato AND pg.status_transacao = 'Confirmado') AS parcelas_pagas,
                (SELECT COUNT(*) FROM Pagamento_Contrato pg
-                 WHERE pg.id_contrato = v.id_contrato) AS parcelas_total,
-               av.nota AS avaliacao_nota, av.comentario AS avaliacao_comentario
+                 WHERE pg.id_contrato = v.id_contrato) AS parcelas_total
         FROM Viagem v
         JOIN Contrato_Digital cd ON cd.id_contrato = v.id_contrato
         JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
         JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
         JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
         LEFT JOIN Pacote pa ON pa.id_pacote = co.id_pacote
-        LEFT JOIN Avaliacao_Viagem av ON av.id_viagem = v.id_viagem AND av.id_cliente = op.id_cliente
         WHERE op.id_cliente = %s
         ORDER BY v.data_embarque DESC
     """, (id_cliente,), fetch="all") or []
+
+    # Parceiros (hotel, transporte, passeio...) de cada cotação — via
+    # Item_Cotacao -> Modulos_Pacote -> Servicos_Parceiros -> Parceiros —
+    # é o que o cliente pode avaliar (reaproveitando Avaliacoes_Parceiros,
+    # a mesma tabela que a equipe já usa pra avaliar fornecedor).
+    for v in viagens:
+        v["parceiros"] = _chamar(execute_query, """
+            SELECT DISTINCT pa.id_parceiro, pa.razao_social, sp.nome_servico, sp.categoria_servico
+            FROM Item_Cotacao ic
+            JOIN Modulos_Pacote mp ON mp.id_modulo = ic.id_modulo
+            JOIN Servicos_Parceiros sp ON sp.id_servico_parceiro = mp.id_servico_parceiro
+            JOIN Parceiros pa ON pa.id_parceiro = sp.id_parceiro
+            WHERE ic.id_cotacao = %s
+        """, (v["id_cotacao"],), fetch="all") or []
 
     pagamentos = _chamar(execute_query, """
         SELECT pg.id_pagamento, pg.id_contrato, pg.metodo_pagamento, pg.valor_total,
@@ -891,21 +904,32 @@ async def api_conta_enviar_mensagem(
     return _json({"mensagem": "Enviada.", "id": novo_id}, status_code=201)
 
 
-@app.post("/api/conta/viagens/{id_viagem}/avaliacao", tags=["Conta"], status_code=201)
-async def api_conta_avaliar_viagem(
-    id_viagem: int, request: Request, cliente_atual: dict = Depends(obter_cliente_atual),
+@app.post("/api/conta/parceiros/{id_parceiro}/avaliacao", tags=["Conta"], status_code=201)
+async def api_conta_avaliar_parceiro(
+    id_parceiro: int, request: Request, cliente_atual: dict = Depends(obter_cliente_atual),
 ):
-    dono = _chamar(execute_query, """
-        SELECT op.id_cliente
-        FROM Viagem v
-        JOIN Contrato_Digital cd ON cd.id_contrato = v.id_contrato
-        JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
-        JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+    """
+    Cliente avalia um parceiro (hotel, transporte, passeio...) que fez
+    parte de alguma cotação dele — reaproveita Avaliacoes_Parceiros (a
+    mesma tabela que a equipe usa pra avaliar fornecedor internamente),
+    só que aqui id_usuario_interno fica nulo: é a avaliação de quem
+    viajou, não de quem negociou com o parceiro.
+    """
+    vinculo = _chamar(execute_query, """
+        SELECT 1
+        FROM Item_Cotacao ic
+        JOIN Modulos_Pacote mp ON mp.id_modulo = ic.id_modulo
+        JOIN Servicos_Parceiros sp ON sp.id_servico_parceiro = mp.id_servico_parceiro
+        JOIN Cotacao_Personalizadas co ON co.id_cotacao = ic.id_cotacao
         JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
-        WHERE v.id_viagem = %s
-    """, (id_viagem,), fetch="one")
-    if dono is None or dono["id_cliente"] != cliente_atual["id_cliente"]:
-        raise HTTPException(status_code=404, detail="Viagem não encontrada.")
+        WHERE sp.id_parceiro = %s AND op.id_cliente = %s
+        LIMIT 1
+    """, (id_parceiro, cliente_atual["id_cliente"]), fetch="one")
+    if vinculo is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Esse parceiro não faz parte de nenhuma das suas cotações.",
+        )
 
     dados: Dict[str, Any] = await request.json()
     try:
@@ -916,17 +940,7 @@ async def api_conta_avaliar_viagem(
         raise HTTPException(status_code=400, detail="A nota precisa ser de 1 a 5.")
     comentario = (dados.get("comentario") or "").strip() or None
 
-    existente = _chamar(
-        avaliacao_viagem.buscar_avaliacao_por_viagem_e_cliente, id_viagem, cliente_atual["id_cliente"],
-    )
-    if existente:
-        _chamar(avaliacao_viagem.atualizar_avaliacao, existente["id_avaliacao_viagem"],
-                nota=nota, comentario=comentario)
-        return _json({"mensagem": "Avaliação atualizada."})
-
-    novo_id = _chamar(
-        avaliacao_viagem.criar_avaliacao, id_viagem, cliente_atual["id_cliente"], nota, comentario,
-    )
+    novo_id = _chamar(avaliacao_parceiro.criar_avaliacao, id_parceiro, None, nota, comentario)
     return _json({"mensagem": "Avaliação registrada. Obrigado!", "id": novo_id}, status_code=201)
 
 
@@ -1050,14 +1064,6 @@ PERMISSOES_TABELA = {
     ("Operacional", "Pagamento_Contrato"): {
         "leitura": _TODOS_NIVEIS,
         "escrita": {"Admin", "Gerente", "Operacoes"},
-        "exclusao": {"Admin"},
-    },
-    # Avaliação de viagem é o cliente falando, não a equipe — ninguém da
-    # equipe cria isso pelo CRUD genérico (só a rota dedicada da conta do
-    # cliente escreve aqui); Admin pode remover uma avaliação abusiva.
-    ("Operacional", "Avaliacao_Viagem"): {
-        "leitura": _TODOS_NIVEIS,
-        "escrita": set(),
         "exclusao": {"Admin"},
     },
     # Usuario_Interno é a própria equipe — gestão de pessoal é assunto de

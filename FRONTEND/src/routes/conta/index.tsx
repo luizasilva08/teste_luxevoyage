@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  Loader2, LogOut, Plane, CreditCard, MessageCircle, Star, Send, Package,
+  Loader2, LogOut, Plane, CreditCard, MessageCircle, Star, Send, Package, Handshake,
 } from "lucide-react";
 import { SiteHeader } from "../../components/site/SiteHeader";
 import { SiteFooter } from "../../components/site/SiteFooter";
@@ -11,10 +11,11 @@ import {
   useClienteAuth,
   getResumoConta,
   enviarMensagemConta,
-  avaliarViagemConta,
+  avaliarParceiroConta,
   pagarParcelaConta,
   type OportunidadeConta,
   type ViagemConta,
+  type ParceiroConta,
   type PagamentoConta,
   type MensagemConta,
 } from "../../lib/cliente";
@@ -150,21 +151,6 @@ const CORES_STATUS_VIAGEM: Record<string, string> = {
 };
 
 function ViagemCard({ v }: { v: ViagemConta }) {
-  const queryClient = useQueryClient();
-  const [nota, setNota] = useState(v.avaliacao_nota ?? 0);
-  const [comentario, setComentario] = useState(v.avaliacao_comentario ?? "");
-  const [avaliando, setAvaliando] = useState(false);
-
-  const mutAvaliar = useMutation({
-    mutationFn: () => avaliarViagemConta(v.id_viagem, nota, comentario || undefined),
-    onSuccess: () => {
-      toast.success("Avaliação enviada. Obrigado!");
-      setAvaliando(false);
-      queryClient.invalidateQueries({ queryKey: ["conta-resumo"] });
-    },
-    onError: () => toast.error("Não foi possível enviar sua avaliação."),
-  });
-
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
       <div className="flex items-start justify-between gap-3">
@@ -186,47 +172,77 @@ function ViagemCard({ v }: { v: ViagemConta }) {
         <span>{v.parcelas_pagas}/{v.parcelas_total} parcelas pagas</span>
       </div>
 
-      <div className="mt-4 border-t border-border pt-4">
-        {v.avaliacao_nota && !avaliando ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 text-gold">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star key={i} className={`h-4 w-4 ${i < v.avaliacao_nota! ? "fill-current" : ""}`} />
-              ))}
-            </div>
-            <button onClick={() => setAvaliando(true)} className="text-xs font-semibold text-navy hover:underline">
-              Editar avaliação
-            </button>
-          </div>
-        ) : avaliando || !v.avaliacao_nota ? (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              {v.avaliacao_nota ? "Editar avaliação" : "Avaliar esta viagem"}
-            </p>
-            <div className="flex gap-1">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <button key={i} onClick={() => setNota(i + 1)}>
-                  <Star className={`h-6 w-6 transition ${i < nota ? "fill-gold text-gold" : "text-muted-foreground/40"}`} />
-                </button>
-              ))}
-            </div>
-            <textarea
-              value={comentario}
-              onChange={(e) => setComentario(e.target.value)}
-              rows={2}
-              placeholder="Conte como foi (opcional)"
-              className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
-            />
-            <button
-              disabled={nota === 0 || mutAvaliar.isPending}
-              onClick={() => mutAvaliar.mutate()}
-              className="flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-navy-foreground hover:opacity-90 disabled:opacity-50"
-            >
-              {mutAvaliar.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enviar avaliação
-            </button>
-          </div>
-        ) : null}
+      {v.parceiros.length > 0 && (
+        <div className="mt-4 space-y-3 border-t border-border pt-4">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <Handshake className="h-3.5 w-3.5" /> Avalie os parceiros dessa viagem
+          </p>
+          {v.parceiros.map((p) => (
+            <ParceiroAvaliar key={p.id_parceiro} p={p} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ParceiroAvaliar({ p }: { p: ParceiroConta }) {
+  const [nota, setNota] = useState(0);
+  const [comentario, setComentario] = useState("");
+  const [enviado, setEnviado] = useState(false);
+  const [abrir, setAbrir] = useState(false);
+
+  const mutAvaliar = useMutation({
+    mutationFn: () => avaliarParceiroConta(p.id_parceiro, nota, comentario || undefined),
+    onSuccess: () => {
+      toast.success("Avaliação enviada. Obrigado!");
+      setEnviado(true);
+      setAbrir(false);
+    },
+    onError: () => toast.error("Não foi possível enviar sua avaliação."),
+  });
+
+  return (
+    <div className="rounded-xl border border-border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-foreground">{p.razao_social}</p>
+          <p className="text-xs text-muted-foreground">{p.nome_servico} · {p.categoria_servico}</p>
+        </div>
+        {enviado ? (
+          <span className="shrink-0 text-xs font-semibold text-emerald-700">Avaliado ✓</span>
+        ) : (
+          <button onClick={() => setAbrir((v) => !v)} className="shrink-0 text-xs font-semibold text-navy hover:underline">
+            {abrir ? "Fechar" : "Avaliar"}
+          </button>
+        )}
       </div>
+
+      {abrir && !enviado && (
+        <div className="mt-3 space-y-2 border-t border-border pt-3">
+          <div className="flex gap-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <button key={i} type="button" onClick={() => setNota(i + 1)}>
+                <Star className={`h-6 w-6 transition ${i < nota ? "fill-gold text-gold" : "text-muted-foreground/40"}`} />
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={comentario}
+            onChange={(e) => setComentario(e.target.value)}
+            rows={2}
+            placeholder="Conte como foi (opcional)"
+            className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+          />
+          <button
+            disabled={nota === 0 || mutAvaliar.isPending}
+            onClick={() => mutAvaliar.mutate()}
+            className="flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-semibold text-navy-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            {mutAvaliar.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Enviar avaliação
+          </button>
+        </div>
+      )}
     </div>
   );
 }
