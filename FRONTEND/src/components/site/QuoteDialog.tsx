@@ -40,6 +40,7 @@ export function QuoteDialog({
         nome: String(form.get("nome") || ""),
         email: String(form.get("email") || ""),
         telefone: String(form.get("telefone") || "") || undefined,
+        cpf: String(form.get("cpf") || "") || undefined,
         cep: String(form.get("cep") || "") || undefined,
         mensagem: String(form.get("mensagem") || "") || undefined,
         id_pacote: idPacote,
@@ -117,13 +118,23 @@ export function QuoteDialog({
                   />
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-foreground">CEP (opcional)</label>
-                <input
-                  name="cep"
-                  placeholder="00000-000"
-                  className="mt-1.5 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-foreground">CPF</label>
+                  <input
+                    name="cpf"
+                    placeholder="000.000.000-00"
+                    className="mt-1.5 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">CEP (opcional)</label>
+                  <input
+                    name="cep"
+                    placeholder="00000-000"
+                    className="mt-1.5 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+                  />
+                </div>
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">

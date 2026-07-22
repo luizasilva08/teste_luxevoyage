@@ -97,6 +97,7 @@ export type PedidoCotacao = {
   nome: string;
   email: string;
   telefone?: string;
+  cpf?: string;
   cep?: string;
   id_pacote?: number;
   id_municipio_destino?: number;

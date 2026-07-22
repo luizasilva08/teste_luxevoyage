@@ -1,7 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogIn, LogOut } from "lucide-react";
+import { LogIn, LogOut, UserCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, logout } from "../../lib/auth";
+import { useClienteAuth, clienteLogout } from "../../lib/cliente";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" as const },
@@ -10,10 +11,17 @@ const NAV_ITEMS = [
 
 export function SiteHeader() {
   const { usuario, carregando } = useAuth();
+  const { cliente, carregando: carregandoCliente } = useClienteAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
     logout();
+    toast.success("Sessão encerrada.");
+    navigate({ to: "/" });
+  }
+
+  function handleLogoutCliente() {
+    clienteLogout();
     toast.success("Sessão encerrada.");
     navigate({ to: "/" });
   }
@@ -59,10 +67,25 @@ export function SiteHeader() {
                 <LogOut className="h-4 w-4" /> Sair
               </button>
             </>
+          ) : carregandoCliente ? null : cliente ? (
+            <>
+              <Link
+                to="/conta"
+                className="hidden items-center gap-1.5 text-sm font-medium text-foreground/80 hover:text-foreground md:inline-flex"
+              >
+                <UserCircle className="h-4 w-4" /> Olá, {cliente.nome.split(" ")[0]} · Minha conta
+              </Link>
+              <button
+                onClick={handleLogoutCliente}
+                className="inline-flex items-center gap-1.5 rounded-full bg-navy px-5 py-2.5 text-sm font-semibold text-navy-foreground transition hover:opacity-90"
+              >
+                <LogOut className="h-4 w-4" /> Sair
+              </button>
+            </>
           ) : (
             <>
               <Link
-                to="/auth"
+                to="/conta/entrar"
                 className="hidden items-center gap-1.5 text-sm font-medium text-foreground/80 hover:text-foreground md:inline-flex"
               >
                 <LogIn className="h-4 w-4" /> Entrar

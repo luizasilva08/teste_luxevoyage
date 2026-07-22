@@ -12,7 +12,7 @@ from catalogo import pacote, temporada, modulo_pacote, preco_sazonal, destaque_s
 from clientes import cliente, interesse_cliente, consentimento_lgpd
 from crm import usuario_interno, oportunidade_crm, historico_interacao, solicitacao_sla
 from comercial import cotacao_personalizada, item_cotacao, proposta_comercial, contrato_digital
-from operacional import viagem, pagamento_contrato
+from operacional import viagem, pagamento_contrato, avaliacao_viagem
 from auditoria import log_acesso
 
 
@@ -106,6 +106,9 @@ REGISTRO = {
                                     pk="id_pagamento",
                                     cols=["id_contrato", "metodo_pagamento", "valor_total",
                                           "numero_parcela", "total_parcelas", "status_transacao"]),
+        "Avaliacao_Viagem": dict(mod=avaliacao_viagem, entidade="avaliacao", plural="avaliacoes",
+                                  pk="id_avaliacao_viagem",
+                                  cols=["id_viagem", "id_cliente", "nota", "comentario"]),
     },
     "Auditoria": {
         "Log_Acesso": dict(mod=log_acesso, entidade="log", plural="logs",

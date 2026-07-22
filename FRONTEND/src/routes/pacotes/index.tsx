@@ -153,7 +153,16 @@ function PacotesPage() {
   );
 }
 
+const CORES_STATUS_PACOTE: Record<string, string> = {
+  Publicado: "bg-emerald-600",
+  Ativo: "bg-emerald-600",
+  "Em Revisão": "bg-amber-600",
+  Rascunho: "bg-muted-foreground/70",
+  Inativo: "bg-red-600",
+};
+
 function PacoteCard({ p }: { p: PacoteResumo }) {
+  const corStatus = CORES_STATUS_PACOTE[p.status] ?? "bg-muted-foreground/70";
   return (
     <article className="group overflow-hidden rounded-2xl border border-border bg-card">
       <Link to="/pacotes/$id" params={{ id: String(p.id_pacote) }} className="relative block h-56">
@@ -170,6 +179,11 @@ function PacoteCard({ p }: { p: PacoteResumo }) {
         )}
         <span className="absolute right-3 top-3 rounded-md bg-navy/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-navy-foreground">
           {p.categoria || p.regiao_nome}
+        </span>
+        <span
+          className={`absolute bottom-3 right-3 rounded-md px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-white ${corStatus}`}
+        >
+          {p.status}
         </span>
       </Link>
       <div className="p-5">

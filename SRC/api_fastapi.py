@@ -33,6 +33,7 @@ import sys
 import pathlib
 import decimal
 import datetime
+import uuid
 from typing import Any, Dict, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
@@ -56,9 +57,12 @@ from crm import usuario_interno          # noqa: E402
 from clientes import cliente as cliente_mod          # noqa: E402
 from clientes import interesse_cliente               # noqa: E402
 from crm import oportunidade_crm, historico_interacao  # noqa: E402
+from operacional import pagamento_contrato, avaliacao_viagem  # noqa: E402
 from auth import (                       # noqa: E402
     checar_senha,
+    hash_senha,
     criar_token,
+    criar_token_cliente,
     decodificar_token,
 )
 
@@ -156,6 +160,33 @@ def obter_usuario_atual(authorization: Optional[str] = Header(None)) -> dict:
     return usuario
 
 
+def _cliente_publico(cliente: dict) -> dict:
+    """Remove hash/salt de senha antes de devolver um cliente pro front-end."""
+    return {k: v for k, v in cliente.items() if k not in ("senha_hash", "salt")}
+
+
+def obter_cliente_atual(authorization: Optional[str] = Header(None)) -> dict:
+    """
+    Dependência do FastAPI equivalente a obter_usuario_atual(), mas para a
+    área "Minha conta" do CLIENTE — exige um token com "tipo": "cliente" no
+    payload, então um token de Usuario_Interno (equipe) não abre essas
+    rotas, e vice-versa.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Token não informado.")
+
+    token = authorization.split(" ", 1)[1].strip()
+    payload = decodificar_token(token)
+    if payload is None or payload.get("tipo") != "cliente":
+        raise HTTPException(status_code=401, detail="Token inválido ou expirado.")
+
+    cliente_atual = cliente_mod.buscar_cliente_por_id(int(payload["sub"]))
+    if cliente_atual is None:
+        raise HTTPException(status_code=401, detail="Cliente não encontrado.")
+
+    return cliente_atual
+
+
 # ---------------------------------------------------------------------------
 # Autenticação — login da equipe interna (Usuario_Interno).
 #
@@ -192,6 +223,71 @@ def api_me(usuario_atual: dict = Depends(obter_usuario_atual)):
     """Devolve os dados do usuário dono do token enviado — útil pro front
     validar/restaurar a sessão ao recarregar a página."""
     return _json(_usuario_publico(usuario_atual))
+
+
+# ---------------------------------------------------------------------------
+# Autenticação — login/cadastro do CLIENTE (área "Minha conta" do site
+# público). Independente da autenticação da equipe acima: token diferente
+# ("tipo": "cliente"), tabela diferente (Cliente, não Usuario_Interno).
+# ---------------------------------------------------------------------------
+@app.post("/api/auth/cliente/registrar", tags=["Autenticação"], status_code=201)
+async def api_cliente_registrar(request: Request):
+    """
+    Cria a senha de acesso de um cliente. Cobre os dois casos:
+      - a pessoa já existe como Cliente (pediu uma cotação pelo site antes,
+        sem senha) -> só define a senha nessa conta já existente;
+      - e-mail novo -> cria o Cliente na hora.
+    """
+    dados: Dict[str, Any] = await request.json()
+    nome = (dados.get("nome") or "").strip()
+    email = (dados.get("email") or "").strip()
+    senha = dados.get("senha") or ""
+    telefone = (dados.get("telefone") or "").strip() or None
+    cep = (dados.get("cep") or "").strip() or None
+
+    if not email or not senha:
+        raise HTTPException(status_code=400, detail="Informe ao menos e-mail e senha.")
+    if len(senha) < 6:
+        raise HTTPException(status_code=400, detail="Use uma senha com pelo menos 6 caracteres.")
+
+    cliente_existente = _chamar(cliente_mod.buscar_cliente_por_email, email)
+    if cliente_existente:
+        if cliente_existente.get("senha_hash"):
+            raise HTTPException(status_code=409, detail="Já existe uma conta com esse e-mail.")
+        id_cliente = cliente_existente["id_cliente"]
+    else:
+        if not nome:
+            raise HTTPException(status_code=400, detail="Informe seu nome.")
+        cpf_pendente = f"PENDENTE-{uuid.uuid4().hex[:12].upper()}"
+        id_cliente = _chamar(cliente_mod.criar_cliente, nome, cpf_pendente, email, telefone, cep, None)
+
+    _chamar(cliente_mod.definir_senha, id_cliente, hash_senha(senha))
+    cliente_final = _chamar(cliente_mod.buscar_cliente_por_id, id_cliente)
+
+    token = criar_token_cliente(id_cliente, email)
+    return _json({"token": token, "cliente": _cliente_publico(cliente_final)}, status_code=201)
+
+
+@app.post("/api/auth/cliente/login", tags=["Autenticação"])
+async def api_cliente_login(request: Request):
+    dados: Dict[str, Any] = await request.json()
+    email = (dados.get("email") or "").strip()
+    senha = dados.get("senha") or ""
+
+    if not email or not senha:
+        raise HTTPException(status_code=400, detail="Informe e-mail e senha.")
+
+    cliente_encontrado = _chamar(cliente_mod.buscar_cliente_por_email, email)
+    if cliente_encontrado is None or not checar_senha(senha, cliente_encontrado.get("senha_hash")):
+        raise HTTPException(status_code=401, detail="E-mail ou senha inválidos.")
+
+    token = criar_token_cliente(cliente_encontrado["id_cliente"], email)
+    return _json({"token": token, "cliente": _cliente_publico(cliente_encontrado)})
+
+
+@app.get("/api/auth/cliente/me", tags=["Autenticação"])
+def api_cliente_me(cliente_atual: dict = Depends(obter_cliente_atual)):
+    return _json(_cliente_publico(cliente_atual))
 
 
 # ---------------------------------------------------------------------------
@@ -294,28 +390,29 @@ def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
 # cotação encadeia 3 tabelas (Cliente -> Interesses_Cliente ->
 # Oportunidade_CRM) na ordem certa, sem expor esse encadeamento no front.
 # ---------------------------------------------------------------------------
-_STATUS_PACOTE_VISIVEL = ("Publicado", "Ativo")
+# Sem filtro de status aqui de propósito: o catálogo público mostra os 200
+# pacotes cadastrados, qualquer que seja o status (Rascunho, Em Revisão,
+# Ativo, Publicado, Inativo) — o card mostra o status como selo pra ficar
+# transparente qual já está pronto pra reserva e qual ainda não.
+# ---------------------------------------------------------------------------
 
 
 @app.get("/api/publico/estados", tags=["Público"])
 def api_publico_estados():
-    """Contagem de pacotes visíveis por estado — alimenta o mapa de
-    filtro em /pacotes (LEFT JOIN pra devolver os 27 estados, mesmo os
-    que ainda não têm nenhum pacote publicado)."""
-    placeholders = ", ".join(["%s"] * len(_STATUS_PACOTE_VISIVEL))
+    """Contagem de pacotes por estado — alimenta o mapa de filtro em
+    /pacotes (LEFT JOIN pra devolver os 27 estados, mesmo os que ainda
+    não têm nenhum pacote)."""
     registros = _chamar(
         execute_query,
-        f"""
+        """
         SELECT e.sigla AS estado_sigla, e.nome AS estado_nome, e.regiao_nome,
                COUNT(p.id_pacote) AS total_pacotes
         FROM Estado e
         LEFT JOIN Municipio m ON m.id_estado = e.id_estado
         LEFT JOIN Pacote p ON p.id_municipio_destino = m.id_municipio
-                            AND p.status IN ({placeholders})
         GROUP BY e.id_estado, e.sigla, e.nome, e.regiao_nome
         ORDER BY e.sigla
         """,
-        _STATUS_PACOTE_VISIVEL,
         fetch="all",
     ) or []
     return _json(registros)
@@ -323,10 +420,9 @@ def api_publico_estados():
 
 @app.get("/api/publico/destinos", tags=["Público"])
 def api_publico_destinos():
-    placeholders = ", ".join(["%s"] * len(_STATUS_PACOTE_VISIVEL))
     registros = _chamar(
         execute_query,
-        f"""
+        """
         SELECT m.id_municipio, m.nome AS destino, m.categoria,
                e.sigla AS estado_sigla, e.nome AS estado_nome, e.regiao_nome,
                COUNT(p.id_pacote) AS total_pacotes,
@@ -336,12 +432,10 @@ def api_publico_destinos():
         JOIN Estado e ON e.id_estado = m.id_estado
         LEFT JOIN Modulos_Pacote mp ON mp.id_pacote = p.id_pacote
         LEFT JOIN Preco_Sazonal ps ON ps.id_modulo = mp.id_modulo
-        WHERE p.status IN ({placeholders})
         GROUP BY m.id_municipio, m.nome, m.categoria, e.sigla, e.nome, e.regiao_nome
         ORDER BY total_pacotes DESC
         LIMIT 24
         """,
-        _STATUS_PACOTE_VISIVEL,
         fetch="all",
     ) or []
     return _json(registros)
@@ -352,12 +446,16 @@ def api_publico_pacotes(
     busca: Optional[str] = None,
     regiao: Optional[str] = None,
     estado: Optional[str] = None,
+    status: Optional[str] = None,
     limit: int = Query(24, ge=1, le=250),
     offset: int = Query(0, ge=0),
 ):
-    condicoes = [f"p.status IN ({', '.join(['%s'] * len(_STATUS_PACOTE_VISIVEL))})"]
-    params: list = list(_STATUS_PACOTE_VISIVEL)
+    condicoes = ["1 = 1"]
+    params: list = []
 
+    if status:
+        condicoes.append("p.status = %s")
+        params.append(status)
     if busca:
         condicoes.append("(p.nome_pacote LIKE %s OR m.nome LIKE %s)")
         curinga = f"%{busca}%"
@@ -462,6 +560,7 @@ async def api_publico_solicitar_cotacao(request: Request):
     nome = (dados.get("nome") or "").strip()
     email = (dados.get("email") or "").strip()
     telefone = (dados.get("telefone") or "").strip() or None
+    cpf = (dados.get("cpf") or "").strip() or None
     cep = (dados.get("cep") or "").strip() or None
     id_municipio_destino = dados.get("id_municipio_destino")
     id_pacote = dados.get("id_pacote")
@@ -484,7 +583,12 @@ async def api_publico_solicitar_cotacao(request: Request):
     if cliente_existente:
         id_cliente = cliente_existente[0]["id_cliente"]
     else:
-        id_cliente = _chamar(cliente_mod.criar_cliente, nome, None, email, telefone, cep, None)
+        # A coluna é NOT NULL + UNIQUE no banco — se o visitante não
+        # preencher o CPF no formulário, geramos um marcador único (em vez
+        # de mandar None, que quebra com "cannot be null"), que a equipe
+        # substitui pelo CPF real quando fechar a venda.
+        cpf_final = cpf or f"PENDENTE-{uuid.uuid4().hex[:12].upper()}"
+        id_cliente = _chamar(cliente_mod.criar_cliente, nome, cpf_final, email, telefone, cep, None)
 
     _chamar(interesse_cliente.criar_interesse, id_cliente, id_municipio_destino, "Novo")
 
@@ -693,6 +797,166 @@ def api_painel_viagens(usuario_atual: dict = Depends(obter_usuario_atual)):
 
 
 # ---------------------------------------------------------------------------
+# "Minha conta" — área do CLIENTE (protegida por obter_cliente_atual, não
+# obter_usuario_atual). O cliente só enxerga o que é dele: toda query aqui
+# filtra por id_cliente vindo do token, nunca de um parâmetro da URL — não
+# tem como um cliente pedir os dados de outro trocando um id na rota.
+# ---------------------------------------------------------------------------
+@app.get("/api/conta/resumo", tags=["Conta"])
+def api_conta_resumo(cliente_atual: dict = Depends(obter_cliente_atual)):
+    id_cliente = cliente_atual["id_cliente"]
+
+    oportunidades = _chamar(execute_query, """
+        SELECT o.id_oportunidade, o.estagio_funil, o.valor_estimado,
+               u.nome AS consultor_nome, p.nome_pacote, c.status AS status_cotacao
+        FROM Oportunidade_CRM o
+        LEFT JOIN Usuario_Interno u ON u.id_usuario_interno = o.id_usuario_interno
+        LEFT JOIN Cotacao_Personalizadas c ON c.id_oportunidade = o.id_oportunidade
+        LEFT JOIN Pacote p ON p.id_pacote = c.id_pacote
+        WHERE o.id_cliente = %s
+        ORDER BY o.id_oportunidade DESC
+    """, (id_cliente,), fetch="all") or []
+
+    viagens = _chamar(execute_query, """
+        SELECT v.id_viagem, v.status_viagem, v.data_embarque, v.data_retorno, v.id_contrato,
+               pa.nome_pacote, cd.status AS status_contrato,
+               (SELECT COUNT(*) FROM Pagamento_Contrato pg
+                 WHERE pg.id_contrato = v.id_contrato AND pg.status_transacao = 'Confirmado') AS parcelas_pagas,
+               (SELECT COUNT(*) FROM Pagamento_Contrato pg
+                 WHERE pg.id_contrato = v.id_contrato) AS parcelas_total,
+               av.nota AS avaliacao_nota, av.comentario AS avaliacao_comentario
+        FROM Viagem v
+        JOIN Contrato_Digital cd ON cd.id_contrato = v.id_contrato
+        JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
+        JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+        JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
+        LEFT JOIN Pacote pa ON pa.id_pacote = co.id_pacote
+        LEFT JOIN Avaliacao_Viagem av ON av.id_viagem = v.id_viagem AND av.id_cliente = op.id_cliente
+        WHERE op.id_cliente = %s
+        ORDER BY v.data_embarque DESC
+    """, (id_cliente,), fetch="all") or []
+
+    pagamentos = _chamar(execute_query, """
+        SELECT pg.id_pagamento, pg.id_contrato, pg.metodo_pagamento, pg.valor_total,
+               pg.numero_parcela, pg.total_parcelas, pg.status_transacao, pa.nome_pacote
+        FROM Pagamento_Contrato pg
+        JOIN Contrato_Digital cd ON cd.id_contrato = pg.id_contrato
+        JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
+        JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+        JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
+        LEFT JOIN Pacote pa ON pa.id_pacote = co.id_pacote
+        WHERE op.id_cliente = %s
+        ORDER BY pg.id_contrato, pg.numero_parcela
+    """, (id_cliente,), fetch="all") or []
+
+    mensagens = _chamar(execute_query, """
+        SELECT hi.id_interacao, hi.id_oportunidade, hi.tipo_interacao, hi.data_interacao,
+               u.nome AS consultor_nome
+        FROM Historico_Interacoes hi
+        LEFT JOIN Usuario_Interno u ON u.id_usuario_interno = hi.id_usuario_interno
+        WHERE hi.id_cliente = %s
+        ORDER BY hi.data_interacao ASC
+    """, (id_cliente,), fetch="all") or []
+
+    return _json({
+        "cliente": _cliente_publico(cliente_atual),
+        "oportunidades": oportunidades,
+        "viagens": viagens,
+        "pagamentos": pagamentos,
+        "mensagens": mensagens,
+    })
+
+
+@app.post("/api/conta/oportunidades/{id_oportunidade}/mensagens", tags=["Conta"], status_code=201)
+async def api_conta_enviar_mensagem(
+    id_oportunidade: int, request: Request, cliente_atual: dict = Depends(obter_cliente_atual),
+):
+    """Cliente manda uma mensagem pro consultor — some Historico_Interacoes
+    com id_usuario_interno nulo, prefixada, pra virar uma conversa de mão
+    dupla (a equipe já vê/responde isso na tela de atendimento do painel)."""
+    oportunidade = _chamar(oportunidade_crm.buscar_oportunidade_por_id, id_oportunidade)
+    if oportunidade is None or oportunidade["id_cliente"] != cliente_atual["id_cliente"]:
+        raise HTTPException(status_code=404, detail="Oportunidade não encontrada.")
+
+    dados: Dict[str, Any] = await request.json()
+    mensagem = (dados.get("mensagem") or "").strip()
+    if not mensagem:
+        raise HTTPException(status_code=400, detail="Escreva uma mensagem.")
+
+    novo_id = _chamar(
+        historico_interacao.criar_interacao,
+        id_oportunidade, cliente_atual["id_cliente"], None,
+        f"Cliente: {mensagem[:500]}", datetime.datetime.now(),
+    )
+    return _json({"mensagem": "Enviada.", "id": novo_id}, status_code=201)
+
+
+@app.post("/api/conta/viagens/{id_viagem}/avaliacao", tags=["Conta"], status_code=201)
+async def api_conta_avaliar_viagem(
+    id_viagem: int, request: Request, cliente_atual: dict = Depends(obter_cliente_atual),
+):
+    dono = _chamar(execute_query, """
+        SELECT op.id_cliente
+        FROM Viagem v
+        JOIN Contrato_Digital cd ON cd.id_contrato = v.id_contrato
+        JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
+        JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+        JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
+        WHERE v.id_viagem = %s
+    """, (id_viagem,), fetch="one")
+    if dono is None or dono["id_cliente"] != cliente_atual["id_cliente"]:
+        raise HTTPException(status_code=404, detail="Viagem não encontrada.")
+
+    dados: Dict[str, Any] = await request.json()
+    try:
+        nota = int(dados.get("nota"))
+    except (TypeError, ValueError):
+        nota = 0
+    if nota < 1 or nota > 5:
+        raise HTTPException(status_code=400, detail="A nota precisa ser de 1 a 5.")
+    comentario = (dados.get("comentario") or "").strip() or None
+
+    existente = _chamar(
+        avaliacao_viagem.buscar_avaliacao_por_viagem_e_cliente, id_viagem, cliente_atual["id_cliente"],
+    )
+    if existente:
+        _chamar(avaliacao_viagem.atualizar_avaliacao, existente["id_avaliacao_viagem"],
+                nota=nota, comentario=comentario)
+        return _json({"mensagem": "Avaliação atualizada."})
+
+    novo_id = _chamar(
+        avaliacao_viagem.criar_avaliacao, id_viagem, cliente_atual["id_cliente"], nota, comentario,
+    )
+    return _json({"mensagem": "Avaliação registrada. Obrigado!", "id": novo_id}, status_code=201)
+
+
+@app.post("/api/conta/pagamentos/{id_pagamento}/pagar", tags=["Conta"])
+def api_conta_pagar(id_pagamento: int, cliente_atual: dict = Depends(obter_cliente_atual)):
+    """
+    Ação DEMONSTRATIVA: não existe integração real com nenhum meio de
+    pagamento neste projeto. Isso só confirma a parcela como paga no
+    banco, pra fechar o fluxo de ponta a ponta (pedido -> cotação ->
+    contrato -> pagamento -> viagem) sem depender de um gateway de verdade.
+    """
+    dono = _chamar(execute_query, """
+        SELECT op.id_cliente, pg.status_transacao
+        FROM Pagamento_Contrato pg
+        JOIN Contrato_Digital cd ON cd.id_contrato = pg.id_contrato
+        JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
+        JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+        JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
+        WHERE pg.id_pagamento = %s
+    """, (id_pagamento,), fetch="one")
+    if dono is None or dono["id_cliente"] != cliente_atual["id_cliente"]:
+        raise HTTPException(status_code=404, detail="Pagamento não encontrado.")
+    if dono["status_transacao"] == "Confirmado":
+        raise HTTPException(status_code=400, detail="Essa parcela já está paga.")
+
+    _chamar(pagamento_contrato.atualizar_pagamento, id_pagamento, status_transacao="Confirmado")
+    return _json({"mensagem": "Pagamento confirmado (simulação)."})
+
+
+# ---------------------------------------------------------------------------
 # Permissões por nível de acesso (Usuario_Interno.nivel_acesso).
 #
 # O CRUD genérico abaixo atende as 25 tabelas do REGISTRO, mas nem todo
@@ -786,6 +1050,14 @@ PERMISSOES_TABELA = {
     ("Operacional", "Pagamento_Contrato"): {
         "leitura": _TODOS_NIVEIS,
         "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    # Avaliação de viagem é o cliente falando, não a equipe — ninguém da
+    # equipe cria isso pelo CRUD genérico (só a rota dedicada da conta do
+    # cliente escreve aqui); Admin pode remover uma avaliação abusiva.
+    ("Operacional", "Avaliacao_Viagem"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": set(),
         "exclusao": {"Admin"},
     },
     # Usuario_Interno é a própria equipe — gestão de pessoal é assunto de
