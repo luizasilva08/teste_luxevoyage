@@ -8,10 +8,17 @@
 import { apiFetch } from "./api";
 
 // --- Dashboard ---------------------------------------------------------
+// O back-end (api_fastapi.py) devolve campos diferentes conforme o cargo:
+// Admin/Gerente recebem "funil" e "propostas_status" (visão comercial);
+// Operações recebe "pacotes_status" (visão operacional/catálogo) — por
+// isso os três são opcionais aqui.
 export type Dashboard = {
+  escopo: "comercial" | "operacional";
   metricas: Record<string, number>;
-  funil: { rotulo: string; total: number }[];
   viagens_status: { rotulo: string; total: number }[];
+  funil?: { rotulo: string; total: number }[];
+  propostas_status?: { rotulo: string; total: number }[];
+  pacotes_status?: { rotulo: string; total: number }[];
 };
 
 export function getDashboard(): Promise<Dashboard> {
@@ -141,7 +148,7 @@ export type PacoteAdmin = {
   status: string;
 };
 
-export async function listarPacotesAdmin(limit = 100, offset = 0): Promise<PacoteAdmin[]> {
+export async function listarPacotesAdmin(limit = 250, offset = 0): Promise<PacoteAdmin[]> {
   const data = await apiFetch<{ registros: PacoteAdmin[] }>(
     `/api/Catalogo/Pacote?limit=${limit}&offset=${offset}`,
   );
@@ -183,3 +190,84 @@ export async function listarMunicipios(limit = 500): Promise<MunicipioOpcao[]> {
 }
 
 export const STATUS_PACOTE = ["Rascunho", "Em Revisão", "Publicado", "Ativo", "Inativo"] as const;
+
+// --- Cliente 360° (destinos de interesse + oportunidades já com pacote) ---
+export type ClienteInteresse = {
+  id_interesse: number;
+  status: string;
+  destino: string;
+  estado_sigla: string;
+};
+
+export type ClienteOportunidade = {
+  id_oportunidade: number;
+  estagio_funil: string;
+  valor_estimado: number | null;
+  id_usuario_interno: number | null;
+  consultor_nome: string | null;
+  nome_pacote: string | null;
+  status_cotacao: string | null;
+};
+
+export type ClienteCompleto = ClientePainel & {
+  interesses: ClienteInteresse[];
+  oportunidades: ClienteOportunidade[];
+};
+
+export function buscarClienteCompleto(id: number): Promise<ClienteCompleto> {
+  return apiFetch<ClienteCompleto>(`/api/painel/clientes/${id}`);
+}
+
+// --- Propostas comerciais (kanban) -----------------------------------------
+export type PropostaPainel = {
+  id_proposta: number;
+  versao: number;
+  status: string;
+  id_cotacao: number;
+  valor_total_calculado: number | null;
+  nome_pacote: string | null;
+  id_cliente: number;
+  cliente_nome: string;
+};
+
+export function listarPropostas(): Promise<PropostaPainel[]> {
+  return apiFetch<PropostaPainel[]>("/api/painel/propostas");
+}
+
+export function atualizarProposta(id: number, campos: { status?: string }) {
+  return apiFetch(`/api/Comercial/Propostas_Comerciais/${id}`, { method: "PUT", body: campos });
+}
+
+export const ESTAGIOS_PROPOSTA = [
+  "Rascunho",
+  "Enviada ao Cliente",
+  "Aceita pelo Cliente",
+  "Recusada pelo Cliente",
+  "Expirada",
+] as const;
+
+// --- Viagens (pós-venda) ----------------------------------------------------
+export type ViagemPainel = {
+  id_viagem: number;
+  id_contrato: number;
+  status_viagem: string;
+  data_embarque: string;
+  data_retorno: string;
+  id_cliente: number;
+  cliente_nome: string;
+  nome_pacote: string | null;
+  status_contrato: string;
+  parcelas_pagas: number;
+  parcelas_total: number;
+  valor_total: number | null;
+};
+
+export function listarViagens(): Promise<ViagemPainel[]> {
+  return apiFetch<ViagemPainel[]>("/api/painel/viagens");
+}
+
+export function atualizarViagem(id: number, campos: { status_viagem?: string }) {
+  return apiFetch(`/api/Operacional/Viagem/${id}`, { method: "PUT", body: campos });
+}
+
+export const STATUS_VIAGEM = ["Confirmada", "Em Andamento", "Concluída", "Cancelada"] as const;

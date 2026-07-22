@@ -16,4 +16,6 @@ export const podeVerVisaoGeral = (u: Usuario) => tem(u, ["Admin", "Gerente", "Op
 export const podeGerenciarAtendimentos = (u: Usuario) =>
   tem(u, ["Admin", "Gerente", "Suporte", "Vendedor"]);
 export const podeGerenciarCatalogo = (u: Usuario) => tem(u, ["Admin", "Gerente", "Operacoes"]);
+export const podeGerenciarPropostas = (u: Usuario) => tem(u, ["Admin", "Gerente", "Vendedor"]);
+export const podeGerenciarViagens = (u: Usuario) => tem(u, ["Admin", "Gerente", "Operacoes"]);
 export const podeExcluir = (u: Usuario) => tem(u, ["Admin"]);

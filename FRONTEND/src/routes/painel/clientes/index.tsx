@@ -54,20 +54,21 @@ function ClientesPage() {
             <tr>
               <th className="px-5 py-3">Nome</th>
               <th className="px-5 py-3">Contato</th>
+              <th className="px-5 py-3">CPF</th>
               <th className="px-5 py-3">CEP</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={3} className="px-5 py-6 text-center text-muted-foreground">
+                <td colSpan={4} className="px-5 py-6 text-center text-muted-foreground">
                   Carregando...
                 </td>
               </tr>
             )}
             {!isLoading && (clientes ?? []).length === 0 && (
               <tr>
-                <td colSpan={3} className="px-5 py-6 text-center text-muted-foreground">
+                <td colSpan={4} className="px-5 py-6 text-center text-muted-foreground">
                   Nenhum cliente encontrado.
                 </td>
               </tr>
@@ -97,6 +98,7 @@ function ClientesPage() {
                     )}
                   </div>
                 </td>
+                <td className="px-5 py-3 text-muted-foreground">{c.cpf_criptografado || "—"}</td>
                 <td className="px-5 py-3 text-muted-foreground">{c.cep || "—"}</td>
               </tr>
             ))}

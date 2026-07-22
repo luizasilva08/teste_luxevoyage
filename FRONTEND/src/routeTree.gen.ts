@@ -15,6 +15,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as PainelIndexRouteImport } from './routes/painel/index'
 import { Route as PacotesIndexRouteImport } from './routes/pacotes/index'
 import { Route as PacotesIdRouteImport } from './routes/pacotes/$id'
+import { Route as PainelViagensIndexRouteImport } from './routes/painel/viagens/index'
+import { Route as PainelPropostasIndexRouteImport } from './routes/painel/propostas/index'
 import { Route as PainelPacotesIndexRouteImport } from './routes/painel/pacotes/index'
 import { Route as PainelLeadsIndexRouteImport } from './routes/painel/leads/index'
 import { Route as PainelClientesIndexRouteImport } from './routes/painel/clientes/index'
@@ -50,6 +52,16 @@ const PacotesIdRoute = PacotesIdRouteImport.update({
   id: '/pacotes/$id',
   path: '/pacotes/$id',
   getParentRoute: () => rootRouteImport,
+} as any)
+const PainelViagensIndexRoute = PainelViagensIndexRouteImport.update({
+  id: '/viagens/',
+  path: '/viagens/',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelPropostasIndexRoute = PainelPropostasIndexRouteImport.update({
+  id: '/propostas/',
+  path: '/propostas/',
+  getParentRoute: () => PainelRoute,
 } as any)
 const PainelPacotesIndexRoute = PainelPacotesIndexRouteImport.update({
   id: '/pacotes/',
@@ -89,6 +101,8 @@ export interface FileRoutesByFullPath {
   '/painel/clientes/': typeof PainelClientesIndexRoute
   '/painel/leads/': typeof PainelLeadsIndexRoute
   '/painel/pacotes/': typeof PainelPacotesIndexRoute
+  '/painel/propostas/': typeof PainelPropostasIndexRoute
+  '/painel/viagens/': typeof PainelViagensIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -101,6 +115,8 @@ export interface FileRoutesByTo {
   '/painel/clientes': typeof PainelClientesIndexRoute
   '/painel/leads': typeof PainelLeadsIndexRoute
   '/painel/pacotes': typeof PainelPacotesIndexRoute
+  '/painel/propostas': typeof PainelPropostasIndexRoute
+  '/painel/viagens': typeof PainelViagensIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,6 +131,8 @@ export interface FileRoutesById {
   '/painel/clientes/': typeof PainelClientesIndexRoute
   '/painel/leads/': typeof PainelLeadsIndexRoute
   '/painel/pacotes/': typeof PainelPacotesIndexRoute
+  '/painel/propostas/': typeof PainelPropostasIndexRoute
+  '/painel/viagens/': typeof PainelViagensIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -130,6 +148,8 @@ export interface FileRouteTypes {
     | '/painel/clientes/'
     | '/painel/leads/'
     | '/painel/pacotes/'
+    | '/painel/propostas/'
+    | '/painel/viagens/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -142,6 +162,8 @@ export interface FileRouteTypes {
     | '/painel/clientes'
     | '/painel/leads'
     | '/painel/pacotes'
+    | '/painel/propostas'
+    | '/painel/viagens'
   id:
     | '__root__'
     | '/'
@@ -155,6 +177,8 @@ export interface FileRouteTypes {
     | '/painel/clientes/'
     | '/painel/leads/'
     | '/painel/pacotes/'
+    | '/painel/propostas/'
+    | '/painel/viagens/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -209,6 +233,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PacotesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/painel/viagens/': {
+      id: '/painel/viagens/'
+      path: '/viagens'
+      fullPath: '/painel/viagens/'
+      preLoaderRoute: typeof PainelViagensIndexRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/painel/propostas/': {
+      id: '/painel/propostas/'
+      path: '/propostas'
+      fullPath: '/painel/propostas/'
+      preLoaderRoute: typeof PainelPropostasIndexRouteImport
+      parentRoute: typeof PainelRoute
+    }
     '/painel/pacotes/': {
       id: '/painel/pacotes/'
       path: '/pacotes'
@@ -254,6 +292,8 @@ interface PainelRouteChildren {
   PainelClientesIndexRoute: typeof PainelClientesIndexRoute
   PainelLeadsIndexRoute: typeof PainelLeadsIndexRoute
   PainelPacotesIndexRoute: typeof PainelPacotesIndexRoute
+  PainelPropostasIndexRoute: typeof PainelPropostasIndexRoute
+  PainelViagensIndexRoute: typeof PainelViagensIndexRoute
 }
 
 const PainelRouteChildren: PainelRouteChildren = {
@@ -263,6 +303,8 @@ const PainelRouteChildren: PainelRouteChildren = {
   PainelClientesIndexRoute: PainelClientesIndexRoute,
   PainelLeadsIndexRoute: PainelLeadsIndexRoute,
   PainelPacotesIndexRoute: PainelPacotesIndexRoute,
+  PainelPropostasIndexRoute: PainelPropostasIndexRoute,
+  PainelViagensIndexRoute: PainelViagensIndexRoute,
 }
 
 const PainelRouteWithChildren =

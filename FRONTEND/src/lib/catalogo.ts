@@ -5,6 +5,17 @@
  */
 import { apiFetch } from "./api";
 
+export type EstadoResumo = {
+  estado_sigla: string;
+  estado_nome: string;
+  regiao_nome: string;
+  total_pacotes: number;
+};
+
+export async function listarEstados(): Promise<EstadoResumo[]> {
+  return apiFetch<EstadoResumo[]>("/api/publico/estados");
+}
+
 export type Destino = {
   id_municipio: number;
   destino: string;

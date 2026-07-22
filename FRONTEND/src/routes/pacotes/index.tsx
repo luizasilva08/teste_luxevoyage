@@ -5,6 +5,7 @@ import { Search, MapPin, SlidersHorizontal } from "lucide-react";
 import { z } from "zod";
 import { SiteHeader } from "../../components/site/SiteHeader";
 import { SiteFooter } from "../../components/site/SiteFooter";
+import { MapaEstados } from "../../components/site/MapaEstados";
 import { listarPacotes, type PacoteResumo } from "../../lib/catalogo";
 import { imagemDestino } from "../../lib/imagens";
 import { formatarPreco } from "../../lib/format";
@@ -37,7 +38,7 @@ function PacotesPage() {
         busca: search.busca,
         regiao: search.regiao,
         estado: search.estado,
-        limit: 60,
+        limit: 200,
       }),
   });
   const pacotes = data?.registros ?? [];
@@ -49,6 +50,10 @@ function PacotesPage() {
 
   function alternarRegiao(regiao: string) {
     navigate({ search: { ...search, regiao: search.regiao === regiao ? undefined : regiao } });
+  }
+
+  function selecionarEstado(estado: string | undefined) {
+    navigate({ search: { ...search, estado } });
   }
 
   return (
@@ -103,36 +108,44 @@ function PacotesPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-6 py-14">
-        {isLoading && (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-[360px] animate-pulse rounded-2xl bg-muted" />
-            ))}
+        <div className="grid gap-8 lg:grid-cols-[320px_1fr]">
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <MapaEstados selecionado={search.estado} onSelecionar={selecionarEstado} />
+          </aside>
+
+          <div>
+            {isLoading && (
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-[360px] animate-pulse rounded-2xl bg-muted" />
+                ))}
+              </div>
+            )}
+            {isError && (
+              <p className="text-muted-foreground">
+                Não foi possível carregar os pacotes agora. Tente novamente em instantes.
+              </p>
+            )}
+            {!isLoading && !isError && pacotes.length === 0 && (
+              <p className="text-muted-foreground">
+                Nenhum pacote encontrado com esses filtros. Tente ampliar a busca.
+              </p>
+            )}
+            {!isLoading && pacotes.length > 0 && (
+              <>
+                <p className="mb-6 text-sm text-muted-foreground">
+                  {pacotes.length} pacote{pacotes.length === 1 ? "" : "s"} encontrado
+                  {pacotes.length === 1 ? "" : "s"}
+                </p>
+                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                  {pacotes.map((p) => (
+                    <PacoteCard key={p.id_pacote} p={p} />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        )}
-        {isError && (
-          <p className="text-muted-foreground">
-            Não foi possível carregar os pacotes agora. Tente novamente em instantes.
-          </p>
-        )}
-        {!isLoading && !isError && pacotes.length === 0 && (
-          <p className="text-muted-foreground">
-            Nenhum pacote encontrado com esses filtros. Tente ampliar a busca.
-          </p>
-        )}
-        {!isLoading && pacotes.length > 0 && (
-          <>
-            <p className="mb-6 text-sm text-muted-foreground">
-              {pacotes.length} pacote{pacotes.length === 1 ? "" : "s"} encontrado
-              {pacotes.length === 1 ? "" : "s"}
-            </p>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {pacotes.map((p) => (
-                <PacoteCard key={p.id_pacote} p={p} />
-              ))}
-            </div>
-          </>
-        )}
+        </div>
       </section>
 
       <SiteFooter />

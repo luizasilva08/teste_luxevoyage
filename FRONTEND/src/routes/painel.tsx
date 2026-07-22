@@ -1,9 +1,9 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { LayoutDashboard, Users, Workflow, Package, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, Workflow, Package, FileSignature, Plane, LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, logout } from "../lib/auth";
-import { podeVerVisaoGeral } from "../lib/permissoes";
+import { podeVerVisaoGeral, podeGerenciarPropostas } from "../lib/permissoes";
 
 export const Route = createFileRoute("/painel")({
   component: PainelLayout,
@@ -12,6 +12,8 @@ export const Route = createFileRoute("/painel")({
 const NAV = [
   { to: "/painel", label: "Visão geral", icon: LayoutDashboard, exact: true, visivel: podeVerVisaoGeral },
   { to: "/painel/leads", label: "Atendimentos", icon: Workflow, visivel: () => true },
+  { to: "/painel/propostas", label: "Propostas", icon: FileSignature, visivel: podeGerenciarPropostas },
+  { to: "/painel/viagens", label: "Viagens", icon: Plane, visivel: () => true },
   { to: "/painel/clientes", label: "Clientes", icon: Users, visivel: () => true },
   { to: "/painel/pacotes", label: "Catálogo", icon: Package, visivel: () => true },
 ] as const;
