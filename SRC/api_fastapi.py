@@ -227,12 +227,17 @@ def api_registro():
 
 
 # ---------------------------------------------------------------------------
-# Dashboard (home) — mesmas métricas/gráficos do home_page.py do Streamlit
-# e do endpoint equivalente no Flask.
+# Dashboard (home) — o conteúdo muda conforme o cargo de quem está logado:
+# Admin/Gerente enxergam o funil comercial (é quem cobra resultado de
+# vendas); Operações não tem nada a ver com o funil, mas precisa saber o
+# estado do catálogo (quantos pacotes em cada status) pra planejar — por
+# isso os dois recebem métricas diferentes, não a mesma tela com um botão
+# a menos.
 # ---------------------------------------------------------------------------
 @app.get("/api/dashboard", tags=["Sistema"])
 def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
-    if usuario_atual.get("nivel_acesso") not in ("Admin", "Gerente", "Operacoes"):
+    nivel = usuario_atual.get("nivel_acesso")
+    if nivel not in ("Admin", "Gerente", "Operacoes"):
         raise HTTPException(
             status_code=403,
             detail="A visão geral do negócio é restrita a Admin, Gerente e Operações.",
@@ -245,36 +250,40 @@ def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
         except Exception:
             return 0
 
-    metricas = {
-        "Clientes": contar("Cliente"),
-        "Pacotes": contar("Pacote"),
-        "Parceiros": contar("Parceiros"),
-        "Viagens": contar("Viagem"),
+    def agrupar(sql):
+        try:
+            return execute_query(sql, fetch="all") or []
+        except Exception:
+            return []
+
+    resposta = {
+        "escopo": "comercial" if nivel in ("Admin", "Gerente") else "operacional",
+        "metricas": {
+            "Clientes": contar("Cliente"),
+            "Pacotes": contar("Pacote"),
+            "Parceiros": contar("Parceiros"),
+            "Viagens": contar("Viagem"),
+        },
+        "viagens_status": agrupar(
+            "SELECT status_viagem AS rotulo, COUNT(*) AS total FROM Viagem GROUP BY status_viagem"
+        ),
     }
 
-    try:
-        funil = execute_query(
+    if nivel in ("Admin", "Gerente"):
+        resposta["funil"] = agrupar(
             "SELECT estagio_funil AS rotulo, COUNT(*) AS total "
-            "FROM Oportunidade_CRM GROUP BY estagio_funil",
-            fetch="all",
-        ) or []
-    except Exception:
-        funil = []
+            "FROM Oportunidade_CRM GROUP BY estagio_funil"
+        )
+        resposta["propostas_status"] = agrupar(
+            "SELECT status AS rotulo, COUNT(*) AS total "
+            "FROM Propostas_Comerciais GROUP BY status"
+        )
+    else:  # Operacoes
+        resposta["pacotes_status"] = agrupar(
+            "SELECT status AS rotulo, COUNT(*) AS total FROM Pacote GROUP BY status"
+        )
 
-    try:
-        viagens_status = execute_query(
-            "SELECT status_viagem AS rotulo, COUNT(*) AS total "
-            "FROM Viagem GROUP BY status_viagem",
-            fetch="all",
-        ) or []
-    except Exception:
-        viagens_status = []
-
-    return _json({
-        "metricas": metricas,
-        "funil": funil,
-        "viagens_status": viagens_status,
-    })
+    return _json(resposta)
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +295,30 @@ def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
 # Oportunidade_CRM) na ordem certa, sem expor esse encadeamento no front.
 # ---------------------------------------------------------------------------
 _STATUS_PACOTE_VISIVEL = ("Publicado", "Ativo")
+
+
+@app.get("/api/publico/estados", tags=["Público"])
+def api_publico_estados():
+    """Contagem de pacotes visíveis por estado — alimenta o mapa de
+    filtro em /pacotes (LEFT JOIN pra devolver os 27 estados, mesmo os
+    que ainda não têm nenhum pacote publicado)."""
+    placeholders = ", ".join(["%s"] * len(_STATUS_PACOTE_VISIVEL))
+    registros = _chamar(
+        execute_query,
+        f"""
+        SELECT e.sigla AS estado_sigla, e.nome AS estado_nome, e.regiao_nome,
+               COUNT(p.id_pacote) AS total_pacotes
+        FROM Estado e
+        LEFT JOIN Municipio m ON m.id_estado = e.id_estado
+        LEFT JOIN Pacote p ON p.id_municipio_destino = m.id_municipio
+                            AND p.status IN ({placeholders})
+        GROUP BY e.id_estado, e.sigla, e.nome, e.regiao_nome
+        ORDER BY e.sigla
+        """,
+        _STATUS_PACOTE_VISIVEL,
+        fetch="all",
+    ) or []
+    return _json(registros)
 
 
 @app.get("/api/publico/destinos", tags=["Público"])
@@ -319,7 +352,7 @@ def api_publico_pacotes(
     busca: Optional[str] = None,
     regiao: Optional[str] = None,
     estado: Optional[str] = None,
-    limit: int = Query(24, ge=1, le=100),
+    limit: int = Query(24, ge=1, le=250),
     offset: int = Query(0, ge=0),
 ):
     condicoes = [f"p.status IN ({', '.join(['%s'] * len(_STATUS_PACOTE_VISIVEL))})"]
@@ -568,6 +601,98 @@ async def api_painel_criar_interacao(
 
 
 # ---------------------------------------------------------------------------
+# Cliente (visão 360°) — cliente + destinos de interesse (com nome, não só
+# id) + oportunidades já com o pacote vinculado (via Cotacao_Personalizadas,
+# quando existir), pra tela de atendimento mostrar "o que esse cliente já
+# comprou/negociou" sem o front precisar cruzar 3 chamadas na mão.
+# ---------------------------------------------------------------------------
+@app.get("/api/painel/clientes/{id_cliente}", tags=["Painel"])
+def api_painel_cliente_detalhe(id_cliente: int, usuario_atual: dict = Depends(obter_usuario_atual)):
+    cliente = _chamar(cliente_mod.buscar_cliente_por_id, id_cliente)
+    if cliente is None:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+
+    interesses = _chamar(execute_query, """
+        SELECT ic.id_interesse, ic.status, m.nome AS destino, e.sigla AS estado_sigla
+        FROM Interesses_Cliente ic
+        JOIN Municipio m ON m.id_municipio = ic.id_municipio_destino
+        JOIN Estado e ON e.id_estado = m.id_estado
+        WHERE ic.id_cliente = %s
+        ORDER BY ic.id_interesse DESC
+    """, (id_cliente,), fetch="all") or []
+
+    oportunidades = _chamar(execute_query, """
+        SELECT o.id_oportunidade, o.estagio_funil, o.valor_estimado, o.id_usuario_interno,
+               u.nome AS consultor_nome,
+               p.nome_pacote, c.status AS status_cotacao
+        FROM Oportunidade_CRM o
+        LEFT JOIN Usuario_Interno u ON u.id_usuario_interno = o.id_usuario_interno
+        LEFT JOIN Cotacao_Personalizadas c ON c.id_oportunidade = o.id_oportunidade
+        LEFT JOIN Pacote p ON p.id_pacote = c.id_pacote
+        WHERE o.id_cliente = %s
+        ORDER BY o.id_oportunidade DESC
+    """, (id_cliente,), fetch="all") or []
+
+    cliente["interesses"] = interesses
+    cliente["oportunidades"] = oportunidades
+    return _json(cliente)
+
+
+# ---------------------------------------------------------------------------
+# Propostas comerciais (visão Kanban) — Propostas_Comerciais + a cadeia
+# Cotacao_Personalizadas -> Oportunidade_CRM -> Cliente/Pacote, já achatada
+# pra alimentar o quadro por status sem o front montar os JOINs.
+# ---------------------------------------------------------------------------
+@app.get("/api/painel/propostas", tags=["Painel"])
+def api_painel_propostas(usuario_atual: dict = Depends(obter_usuario_atual)):
+    registros = _chamar(execute_query, """
+        SELECT pr.id_proposta, pr.versao, pr.status,
+               co.id_cotacao, co.valor_total_calculado,
+               pa.nome_pacote,
+               cl.id_cliente, cl.nome AS cliente_nome
+        FROM Propostas_Comerciais pr
+        JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+        JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
+        JOIN Cliente cl ON cl.id_cliente = op.id_cliente
+        LEFT JOIN Pacote pa ON pa.id_pacote = co.id_pacote
+        ORDER BY pr.id_proposta DESC
+        LIMIT 400
+    """, fetch="all") or []
+    return _json(registros)
+
+
+# ---------------------------------------------------------------------------
+# Viagens (visão pós-venda) — Viagem + Contrato_Digital + a cadeia até
+# Cliente/Pacote, com o resumo de parcelas pagas. É a tela que faltava pra
+# Operações (o cargo mais numeroso do time) ter algo de fato pra fazer no
+# painel, em vez de só olhar o catálogo.
+# ---------------------------------------------------------------------------
+@app.get("/api/painel/viagens", tags=["Painel"])
+def api_painel_viagens(usuario_atual: dict = Depends(obter_usuario_atual)):
+    registros = _chamar(execute_query, """
+        SELECT v.id_viagem, v.id_contrato, v.status_viagem, v.data_embarque, v.data_retorno,
+               cl.id_cliente, cl.nome AS cliente_nome, pa.nome_pacote,
+               cd.status AS status_contrato,
+               (SELECT COUNT(*) FROM Pagamento_Contrato pg
+                 WHERE pg.id_contrato = v.id_contrato AND pg.status_transacao = 'Confirmado') AS parcelas_pagas,
+               (SELECT COUNT(*) FROM Pagamento_Contrato pg
+                 WHERE pg.id_contrato = v.id_contrato) AS parcelas_total,
+               (SELECT SUM(pg.valor_total) FROM Pagamento_Contrato pg
+                 WHERE pg.id_contrato = v.id_contrato) AS valor_total
+        FROM Viagem v
+        JOIN Contrato_Digital cd ON cd.id_contrato = v.id_contrato
+        JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
+        JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+        JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
+        JOIN Cliente cl ON cl.id_cliente = op.id_cliente
+        LEFT JOIN Pacote pa ON pa.id_pacote = co.id_pacote
+        ORDER BY v.data_embarque DESC
+        LIMIT 400
+    """, fetch="all") or []
+    return _json(registros)
+
+
+# ---------------------------------------------------------------------------
 # Permissões por nível de acesso (Usuario_Interno.nivel_acesso).
 #
 # O CRUD genérico abaixo atende as 25 tabelas do REGISTRO, mas nem todo
@@ -624,6 +749,112 @@ PERMISSOES_TABELA = {
         "leitura": _TODOS_NIVEIS,
         "escrita": {"Admin", "Gerente", "Operacoes"},
         "exclusao": {"Admin"},
+    },
+    # Negociação (cotação -> proposta): Vendedor monta, Gerente/Admin
+    # supervisionam; Operações e Suporte só acompanham (leitura).
+    ("Comercial", "Cotacao_Personalizadas"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Vendedor"},
+        "exclusao": {"Admin"},
+    },
+    ("Comercial", "Propostas_Comerciais"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Vendedor"},
+        "exclusao": {"Admin"},
+    },
+    ("Comercial", "Item_Cotacao"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Vendedor"},
+        "exclusao": {"Admin"},
+    },
+    # Contrato assinado é registro legal (tem hash de integridade e
+    # timestamp de aceite) — ninguém edita ou apaga pelo CRUD, nem Admin.
+    # É gerado quando a proposta é aceita, não digitado à mão.
+    ("Comercial", "Contrato_Digital"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": set(),
+        "exclusao": set(),
+    },
+    # Pós-venda: quem cuida da viagem/cobrança em si é Operações; todo
+    # mundo acompanha (Suporte pra atender o cliente, Vendedor porque já
+    # vendeu e quer saber como foi).
+    ("Operacional", "Viagem"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    ("Operacional", "Pagamento_Contrato"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    # Usuario_Interno é a própria equipe — gestão de pessoal é assunto de
+    # Admin (e leitura de Gerente, pra saber quem é seu time).
+    ("CRM", "Usuario_Interno"): {
+        "leitura": {"Admin", "Gerente"},
+        "escrita": {"Admin"},
+        "exclusao": {"Admin"},
+    },
+    ("CRM", "Solicitacao_SLA"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    # LGPD: quem atende o cliente (Suporte) registra o consentimento.
+    ("Clientes", "Consentimentos_LGPD"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Suporte"},
+        "exclusao": {"Admin"},
+    },
+    # Parceiros/fornecedores: Operações negocia e cadastra no dia a dia.
+    ("Parceiros", "Parceiros"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    ("Parceiros", "Cobertura_Parceiros"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    ("Parceiros", "Servicos_Parceiros"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    ("Parceiros", "Avaliacoes_Parceiros"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    # Resto do catálogo (temporada/preço/destaques): mesma regra do Pacote.
+    ("Catalogo", "Temporada"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    ("Catalogo", "Modulos_Pacote"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    ("Catalogo", "Preco_Sazonal"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    ("Catalogo", "Destaques_Sazonais"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    # Log de auditoria: só existe pra ser lido (Admin/Gerente investigando
+    # algo) — é o sistema quem grava, nunca uma pessoa digitando, então
+    # ninguém tem escrita/exclusão aqui, nem Admin.
+    ("Auditoria", "Log_Acesso"): {
+        "leitura": {"Admin", "Gerente"},
+        "escrita": set(),
+        "exclusao": set(),
     },
 }
 

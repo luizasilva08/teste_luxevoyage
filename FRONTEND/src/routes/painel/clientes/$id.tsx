@@ -1,11 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, Mail, Phone, MapPin } from "lucide-react";
-import {
-  buscarCliente,
-  listarInteressesDoCliente,
-  listarOportunidadesDoCliente,
-} from "../../../lib/painel";
+import { ChevronLeft, Mail, Phone, MapPin, Package, IdCard } from "lucide-react";
+import { buscarClienteCompleto } from "../../../lib/painel";
 import { formatarPreco } from "../../../lib/format";
 
 export const Route = createFileRoute("/painel/clientes/$id")({
@@ -18,16 +14,10 @@ function ClienteDetalhePage() {
 
   const { data: cliente, isLoading } = useQuery({
     queryKey: ["painel-cliente", idCliente],
-    queryFn: () => buscarCliente(idCliente),
+    queryFn: () => buscarClienteCompleto(idCliente),
   });
-  const { data: interesses } = useQuery({
-    queryKey: ["painel-cliente-interesses", idCliente],
-    queryFn: () => listarInteressesDoCliente(idCliente),
-  });
-  const { data: oportunidades } = useQuery({
-    queryKey: ["painel-cliente-oportunidades", idCliente],
-    queryFn: () => listarOportunidadesDoCliente(idCliente),
-  });
+  const interesses = cliente?.interesses ?? [];
+  const oportunidades = cliente?.oportunidades ?? [];
 
   if (isLoading || !cliente) {
     return <div className="h-64 animate-pulse rounded-2xl bg-card" />;
@@ -54,6 +44,11 @@ function ClienteDetalhePage() {
             <Phone className="h-3.5 w-3.5" /> {cliente.telefone_criptografado}
           </span>
         )}
+        {cliente.cpf_criptografado && (
+          <span className="flex items-center gap-1.5">
+            <IdCard className="h-3.5 w-3.5" /> {cliente.cpf_criptografado}
+          </span>
+        )}
         {cliente.cep && (
           <span className="flex items-center gap-1.5">
             <MapPin className="h-3.5 w-3.5" /> {cliente.cep}
@@ -63,20 +58,28 @@ function ClienteDetalhePage() {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="font-display text-xl text-foreground">Oportunidades</h2>
+          <h2 className="font-display text-xl text-foreground">Oportunidades e pacotes</h2>
           <ul className="mt-4 space-y-3">
-            {(oportunidades ?? []).length === 0 && (
+            {oportunidades.length === 0 && (
               <p className="text-sm text-muted-foreground">Nenhuma oportunidade ainda.</p>
             )}
-            {(oportunidades ?? []).map((o) => (
+            {oportunidades.map((o) => (
               <li key={o.id_oportunidade}>
                 <Link
                   to="/painel/leads/$id"
                   params={{ id: String(o.id_oportunidade) }}
-                  className="flex items-center justify-between rounded-lg border border-border p-3 text-sm hover:border-gold"
+                  className="block rounded-lg border border-border p-3 text-sm hover:border-gold"
                 >
-                  <span className="font-medium text-foreground">{o.estagio_funil}</span>
-                  <span className="text-navy">R$ {formatarPreco(o.valor_estimado)}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">{o.estagio_funil}</span>
+                    <span className="text-navy">R$ {formatarPreco(o.valor_estimado)}</span>
+                  </div>
+                  {o.nome_pacote && (
+                    <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Package className="h-3 w-3" /> {o.nome_pacote}
+                      {o.status_cotacao ? ` · ${o.status_cotacao}` : ""}
+                    </p>
+                  )}
                 </Link>
               </li>
             ))}
@@ -86,15 +89,15 @@ function ClienteDetalhePage() {
         <div className="rounded-2xl border border-border bg-card p-6">
           <h2 className="font-display text-xl text-foreground">Interesses de destino</h2>
           <div className="mt-4 flex flex-wrap gap-2">
-            {(interesses ?? []).length === 0 && (
+            {interesses.length === 0 && (
               <p className="text-sm text-muted-foreground">Nenhum interesse registrado.</p>
             )}
-            {(interesses ?? []).map((i) => (
+            {interesses.map((i) => (
               <span
                 key={i.id_interesse}
                 className="rounded-full border border-border bg-muted/60 px-3 py-1 text-xs text-foreground"
               >
-                {i.status}
+                {i.destino} · {i.estado_sigla} <span className="text-muted-foreground">({i.status})</span>
               </span>
             ))}
           </div>

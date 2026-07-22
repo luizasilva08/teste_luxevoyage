@@ -31,7 +31,11 @@ function DashboardPage() {
   return (
     <div>
       <h1 className="font-display text-3xl text-foreground">Visão geral</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Como está o negócio agora.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {data?.escopo === "operacional"
+          ? "Catálogo e viagens — o que depende da operação."
+          : "Como está o funil comercial agora."}
+      </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading &&
@@ -56,7 +60,14 @@ function DashboardPage() {
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <PainelBarras titulo="Funil de oportunidades" dados={data?.funil ?? []} />
+        {data?.escopo === "operacional" ? (
+          <PainelBarras titulo="Pacotes por status" dados={data.pacotes_status ?? []} />
+        ) : (
+          <>
+            <PainelBarras titulo="Funil de oportunidades" dados={data?.funil ?? []} />
+            <PainelBarras titulo="Propostas por status" dados={data?.propostas_status ?? []} />
+          </>
+        )}
         <PainelBarras titulo="Viagens por status" dados={data?.viagens_status ?? []} />
       </div>
     </div>
