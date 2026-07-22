@@ -53,6 +53,9 @@ if str(_PASTA_TEST) not in sys.path:
 from utils import execute_query          # noqa: E402
 from registro import REGISTRO            # noqa: E402
 from crm import usuario_interno          # noqa: E402
+from clientes import cliente as cliente_mod          # noqa: E402
+from clientes import interesse_cliente               # noqa: E402
+from crm import oportunidade_crm, historico_interacao  # noqa: E402
 from auth import (                       # noqa: E402
     checar_senha,
     criar_token,
@@ -266,6 +269,291 @@ def api_dashboard():
         "funil": funil,
         "viagens_status": viagens_status,
     })
+
+
+# ---------------------------------------------------------------------------
+# Site público — catálogo de pacotes e captação de leads.
+#
+# Ficam fora do CRUD genérico de propósito: aqui a resposta já vem com os
+# JOINs (destino, preço, parceiro) que a vitrine precisa, e a rota de
+# cotação encadeia 3 tabelas (Cliente -> Interesses_Cliente ->
+# Oportunidade_CRM) na ordem certa, sem expor esse encadeamento no front.
+# ---------------------------------------------------------------------------
+_STATUS_PACOTE_VISIVEL = ("Publicado", "Ativo")
+
+
+@app.get("/api/publico/destinos", tags=["Público"])
+def api_publico_destinos():
+    placeholders = ", ".join(["%s"] * len(_STATUS_PACOTE_VISIVEL))
+    registros = _chamar(
+        execute_query,
+        f"""
+        SELECT m.id_municipio, m.nome AS destino, m.categoria,
+               e.sigla AS estado_sigla, e.nome AS estado_nome, e.regiao_nome,
+               COUNT(p.id_pacote) AS total_pacotes,
+               MIN(ps.valor_sugerido) AS preco_a_partir
+        FROM Pacote p
+        JOIN Municipio m ON m.id_municipio = p.id_municipio_destino
+        JOIN Estado e ON e.id_estado = m.id_estado
+        LEFT JOIN Modulos_Pacote mp ON mp.id_pacote = p.id_pacote
+        LEFT JOIN Preco_Sazonal ps ON ps.id_modulo = mp.id_modulo
+        WHERE p.status IN ({placeholders})
+        GROUP BY m.id_municipio, m.nome, m.categoria, e.sigla, e.nome, e.regiao_nome
+        ORDER BY total_pacotes DESC
+        LIMIT 24
+        """,
+        _STATUS_PACOTE_VISIVEL,
+        fetch="all",
+    ) or []
+    return _json(registros)
+
+
+@app.get("/api/publico/pacotes", tags=["Público"])
+def api_publico_pacotes(
+    busca: Optional[str] = None,
+    regiao: Optional[str] = None,
+    estado: Optional[str] = None,
+    limit: int = Query(24, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    condicoes = [f"p.status IN ({', '.join(['%s'] * len(_STATUS_PACOTE_VISIVEL))})"]
+    params: list = list(_STATUS_PACOTE_VISIVEL)
+
+    if busca:
+        condicoes.append("(p.nome_pacote LIKE %s OR m.nome LIKE %s)")
+        curinga = f"%{busca}%"
+        params += [curinga, curinga]
+    if regiao:
+        condicoes.append("e.regiao_nome = %s")
+        params.append(regiao)
+    if estado:
+        condicoes.append("e.sigla = %s")
+        params.append(estado)
+
+    where = " AND ".join(condicoes)
+    registros = _chamar(
+        execute_query,
+        f"""
+        SELECT p.id_pacote, p.nome_pacote, p.status,
+               m.id_municipio, m.nome AS destino, m.categoria,
+               e.sigla AS estado_sigla, e.nome AS estado_nome, e.regiao_nome,
+               MIN(ps.valor_sugerido) AS preco_a_partir,
+               MAX(d.classificacao) AS destaque
+        FROM Pacote p
+        JOIN Municipio m ON m.id_municipio = p.id_municipio_destino
+        JOIN Estado e ON e.id_estado = m.id_estado
+        LEFT JOIN Modulos_Pacote mp ON mp.id_pacote = p.id_pacote
+        LEFT JOIN Preco_Sazonal ps ON ps.id_modulo = mp.id_modulo
+        LEFT JOIN Destaques_Sazonais d ON d.id_municipio = m.id_municipio
+        WHERE {where}
+        GROUP BY p.id_pacote, p.nome_pacote, p.status, m.id_municipio, m.nome,
+                 m.categoria, e.sigla, e.nome, e.regiao_nome
+        ORDER BY p.id_pacote DESC
+        LIMIT %s OFFSET %s
+        """,
+        params + [limit, offset],
+        fetch="all",
+    ) or []
+    return _json({"registros": registros, "total": len(registros)})
+
+
+@app.get("/api/publico/pacotes/{id_pacote}", tags=["Público"])
+def api_publico_pacote_detalhe(id_pacote: int):
+    pacote = _chamar(
+        execute_query,
+        """
+        SELECT p.id_pacote, p.nome_pacote, p.status,
+               m.id_municipio, m.nome AS destino, m.categoria,
+               e.sigla AS estado_sigla, e.nome AS estado_nome, e.regiao_nome, e.timezone
+        FROM Pacote p
+        JOIN Municipio m ON m.id_municipio = p.id_municipio_destino
+        JOIN Estado e ON e.id_estado = m.id_estado
+        WHERE p.id_pacote = %s
+        """,
+        (id_pacote,),
+        fetch="one",
+    )
+    if pacote is None:
+        raise HTTPException(status_code=404, detail="Pacote não encontrado.")
+
+    servicos = _chamar(
+        execute_query,
+        """
+        SELECT mp.id_modulo, mp.obrigatorio,
+               sp.nome_servico, sp.categoria_servico,
+               pa.razao_social AS parceiro,
+               MIN(ps.valor_sugerido) AS preco_a_partir
+        FROM Modulos_Pacote mp
+        JOIN Servicos_Parceiros sp ON sp.id_servico_parceiro = mp.id_servico_parceiro
+        JOIN Parceiros pa ON pa.id_parceiro = sp.id_parceiro
+        LEFT JOIN Preco_Sazonal ps ON ps.id_modulo = mp.id_modulo
+        WHERE mp.id_pacote = %s
+        GROUP BY mp.id_modulo, mp.obrigatorio, sp.nome_servico, sp.categoria_servico, pa.razao_social
+        """,
+        (id_pacote,),
+        fetch="all",
+    ) or []
+
+    precos_sazonais = _chamar(
+        execute_query,
+        """
+        SELECT t.nome AS temporada, t.data_inicio, t.data_fim, SUM(ps.valor_sugerido) AS valor_total
+        FROM Preco_Sazonal ps
+        JOIN Modulos_Pacote mp ON mp.id_modulo = ps.id_modulo
+        JOIN Temporada t ON t.id_temporada = ps.id_temporada
+        WHERE mp.id_pacote = %s
+        GROUP BY t.id_temporada, t.nome, t.data_inicio, t.data_fim
+        ORDER BY t.data_inicio
+        """,
+        (id_pacote,),
+        fetch="all",
+    ) or []
+
+    pacote["servicos"] = servicos
+    pacote["precos_sazonais"] = precos_sazonais
+    return _json(pacote)
+
+
+@app.post("/api/publico/cotacoes", tags=["Público"], status_code=201)
+async def api_publico_solicitar_cotacao(request: Request):
+    """Recebe um pedido de cotação da vitrine pública e monta o funil de
+    vendas (Cliente -> Interesses_Cliente -> Oportunidade_CRM ->
+    Historico_Interacoes) sem expor esses detalhes no front."""
+    dados: Dict[str, Any] = await request.json()
+    nome = (dados.get("nome") or "").strip()
+    email = (dados.get("email") or "").strip()
+    telefone = (dados.get("telefone") or "").strip() or None
+    cep = (dados.get("cep") or "").strip() or None
+    id_municipio_destino = dados.get("id_municipio_destino")
+    id_pacote = dados.get("id_pacote")
+    mensagem = (dados.get("mensagem") or "").strip() or None
+
+    if not nome or not email:
+        raise HTTPException(status_code=400, detail="Informe ao menos nome e e-mail.")
+
+    if id_pacote and not id_municipio_destino:
+        pacote = _chamar(execute_query,
+                          "SELECT id_municipio_destino FROM Pacote WHERE id_pacote = %s",
+                          (id_pacote,), fetch="one")
+        if pacote:
+            id_municipio_destino = pacote["id_municipio_destino"]
+
+    if not id_municipio_destino:
+        raise HTTPException(status_code=400, detail="Informe o destino de interesse.")
+
+    cliente_existente = _chamar(cliente_mod.buscar_clientes_por_campo, "email_criptografado", email)
+    if cliente_existente:
+        id_cliente = cliente_existente[0]["id_cliente"]
+    else:
+        id_cliente = _chamar(cliente_mod.criar_cliente, nome, None, email, telefone, cep, None)
+
+    _chamar(interesse_cliente.criar_interesse, id_cliente, id_municipio_destino, "Novo")
+
+    valor_estimado = None
+    if id_pacote:
+        preco = _chamar(execute_query, """
+            SELECT MIN(ps.valor_sugerido) AS valor
+            FROM Modulos_Pacote mp
+            JOIN Preco_Sazonal ps ON ps.id_modulo = mp.id_modulo
+            WHERE mp.id_pacote = %s
+        """, (id_pacote,), fetch="one")
+        valor_estimado = preco["valor"] if preco else None
+
+    id_oportunidade = _chamar(
+        oportunidade_crm.criar_oportunidade, id_cliente, None, "Novo Lead", valor_estimado,
+    )
+
+    tipo_interacao = "Solicitação de cotação via site"
+    if mensagem:
+        tipo_interacao += f": {mensagem[:180]}"
+    _chamar(
+        historico_interacao.criar_interacao,
+        id_oportunidade, id_cliente, None, tipo_interacao, datetime.datetime.now(),
+    )
+
+    return _json({
+        "mensagem": "Recebemos seu pedido! Um consultor da Luxe Voyage vai entrar em contato em breve.",
+        "id_oportunidade": id_oportunidade,
+    }, status_code=201)
+
+
+# ---------------------------------------------------------------------------
+# Painel interno — mesmos dados do CRM (Oportunidade_CRM, Cliente,
+# Historico_Interacoes), mas já com os JOINs que a tela de atendimento
+# precisa (nome do cliente, nome do consultor), em vez de forçar o front a
+# combinar várias chamadas ao CRUD genérico.
+# ---------------------------------------------------------------------------
+@app.get("/api/painel/oportunidades", tags=["Painel"])
+def api_painel_oportunidades(usuario_atual: dict = Depends(obter_usuario_atual)):
+    registros = _chamar(execute_query, """
+        SELECT o.id_oportunidade, o.estagio_funil, o.valor_estimado,
+               o.id_cliente, c.nome AS cliente_nome, c.email_criptografado AS cliente_email,
+               c.telefone_criptografado AS cliente_telefone,
+               o.id_usuario_interno, u.nome AS consultor_nome
+        FROM Oportunidade_CRM o
+        JOIN Cliente c ON c.id_cliente = o.id_cliente
+        LEFT JOIN Usuario_Interno u ON u.id_usuario_interno = o.id_usuario_interno
+        ORDER BY o.id_oportunidade DESC
+        LIMIT 300
+    """, fetch="all") or []
+    return _json(registros)
+
+
+@app.get("/api/painel/oportunidades/{id_oportunidade}", tags=["Painel"])
+def api_painel_oportunidade_detalhe(id_oportunidade: int, usuario_atual: dict = Depends(obter_usuario_atual)):
+    oportunidade = _chamar(execute_query, """
+        SELECT o.*, c.nome AS cliente_nome, c.email_criptografado AS cliente_email,
+               c.telefone_criptografado AS cliente_telefone, c.cep AS cliente_cep,
+               u.nome AS consultor_nome
+        FROM Oportunidade_CRM o
+        JOIN Cliente c ON c.id_cliente = o.id_cliente
+        LEFT JOIN Usuario_Interno u ON u.id_usuario_interno = o.id_usuario_interno
+        WHERE o.id_oportunidade = %s
+    """, (id_oportunidade,), fetch="one")
+    if oportunidade is None:
+        raise HTTPException(status_code=404, detail="Oportunidade não encontrada.")
+
+    interesses = _chamar(execute_query, """
+        SELECT ic.id_interesse, ic.status, m.nome AS destino, e.sigla AS estado_sigla
+        FROM Interesses_Cliente ic
+        JOIN Municipio m ON m.id_municipio = ic.id_municipio_destino
+        JOIN Estado e ON e.id_estado = m.id_estado
+        WHERE ic.id_cliente = %s
+        ORDER BY ic.id_interesse DESC
+    """, (oportunidade["id_cliente"],), fetch="all") or []
+
+    historico = _chamar(execute_query, """
+        SELECT hi.id_interacao, hi.tipo_interacao, hi.data_interacao, u.nome AS consultor_nome
+        FROM Historico_Interacoes hi
+        LEFT JOIN Usuario_Interno u ON u.id_usuario_interno = hi.id_usuario_interno
+        WHERE hi.id_oportunidade = %s
+        ORDER BY hi.data_interacao DESC
+    """, (id_oportunidade,), fetch="all") or []
+
+    oportunidade["interesses"] = interesses
+    oportunidade["historico"] = historico
+    return _json(oportunidade)
+
+
+@app.post("/api/painel/oportunidades/{id_oportunidade}/interacoes", tags=["Painel"], status_code=201)
+async def api_painel_criar_interacao(
+    id_oportunidade: int, request: Request, usuario_atual: dict = Depends(obter_usuario_atual),
+):
+    oportunidade = _chamar(oportunidade_crm.buscar_oportunidade_por_id, id_oportunidade)
+    if oportunidade is None:
+        raise HTTPException(status_code=404, detail="Oportunidade não encontrada.")
+
+    dados: Dict[str, Any] = await request.json()
+    tipo = (dados.get("tipo_interacao") or "").strip()
+    if not tipo:
+        raise HTTPException(status_code=400, detail="Informe o tipo de interação.")
+
+    novo_id = _chamar(
+        historico_interacao.criar_interacao,
+        id_oportunidade, oportunidade["id_cliente"], usuario_atual["id_usuario_interno"],
+        tipo, datetime.datetime.now(),
+    )
+    return _json({"mensagem": "Interação registrada.", "id": novo_id}, status_code=201)
 
 
 # ---------------------------------------------------------------------------
