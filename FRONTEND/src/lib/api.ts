@@ -6,7 +6,9 @@
  *   - em produção (Vercel), defina VITE_API_URL apontando pro domínio
  *     onde a API estiver hospedada (ex.: https://api.luxevoyage.com.br).
  */
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "http://localhost:8000";
+const API_URL =
+  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
+  "http://localhost:8000";
 
 const TOKEN_KEY = "luxevoyage:token";
 const AUTH_EVENT = "luxevoyage:auth-changed";
@@ -43,7 +45,10 @@ export function onAuthChange(callback: () => void) {
 type ApiFetchOptions = Omit<RequestInit, "body"> & { body?: unknown };
 
 /** Faz uma chamada à API, já anexando o token (se houver) e tratando erros. */
-export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: ApiFetchOptions = {},
+): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
 
@@ -60,7 +65,8 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
 
   if (!response.ok) {
     const message =
-      (payload && (payload.erro ?? payload.detail)) ?? `Erro ${response.status} ao falar com a API.`;
+      (payload && (payload.erro ?? payload.detail)) ??
+      `Erro ${response.status} ao falar com a API.`;
     throw new ApiError(String(message), response.status);
   }
 

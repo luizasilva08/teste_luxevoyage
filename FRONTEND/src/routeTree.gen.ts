@@ -9,9 +9,23 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as PainelRouteImport } from './routes/painel'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PainelIndexRouteImport } from './routes/painel/index'
+import { Route as PacotesIndexRouteImport } from './routes/pacotes/index'
+import { Route as PacotesIdRouteImport } from './routes/pacotes/$id'
+import { Route as PainelPacotesIndexRouteImport } from './routes/painel/pacotes/index'
+import { Route as PainelLeadsIndexRouteImport } from './routes/painel/leads/index'
+import { Route as PainelClientesIndexRouteImport } from './routes/painel/clientes/index'
+import { Route as PainelLeadsIdRouteImport } from './routes/painel/leads/$id'
+import { Route as PainelClientesIdRouteImport } from './routes/painel/clientes/$id'
 
+const PainelRoute = PainelRouteImport.update({
+  id: '/painel',
+  path: '/painel',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -22,35 +36,144 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PainelIndexRoute = PainelIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PacotesIndexRoute = PacotesIndexRouteImport.update({
+  id: '/pacotes/',
+  path: '/pacotes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PacotesIdRoute = PacotesIdRouteImport.update({
+  id: '/pacotes/$id',
+  path: '/pacotes/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PainelPacotesIndexRoute = PainelPacotesIndexRouteImport.update({
+  id: '/pacotes/',
+  path: '/pacotes/',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelLeadsIndexRoute = PainelLeadsIndexRouteImport.update({
+  id: '/leads/',
+  path: '/leads/',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelClientesIndexRoute = PainelClientesIndexRouteImport.update({
+  id: '/clientes/',
+  path: '/clientes/',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelLeadsIdRoute = PainelLeadsIdRouteImport.update({
+  id: '/leads/$id',
+  path: '/leads/$id',
+  getParentRoute: () => PainelRoute,
+} as any)
+const PainelClientesIdRoute = PainelClientesIdRouteImport.update({
+  id: '/clientes/$id',
+  path: '/clientes/$id',
+  getParentRoute: () => PainelRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/painel': typeof PainelRouteWithChildren
+  '/pacotes/$id': typeof PacotesIdRoute
+  '/pacotes/': typeof PacotesIndexRoute
+  '/painel/': typeof PainelIndexRoute
+  '/painel/clientes/$id': typeof PainelClientesIdRoute
+  '/painel/leads/$id': typeof PainelLeadsIdRoute
+  '/painel/clientes/': typeof PainelClientesIndexRoute
+  '/painel/leads/': typeof PainelLeadsIndexRoute
+  '/painel/pacotes/': typeof PainelPacotesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/pacotes/$id': typeof PacotesIdRoute
+  '/pacotes': typeof PacotesIndexRoute
+  '/painel': typeof PainelIndexRoute
+  '/painel/clientes/$id': typeof PainelClientesIdRoute
+  '/painel/leads/$id': typeof PainelLeadsIdRoute
+  '/painel/clientes': typeof PainelClientesIndexRoute
+  '/painel/leads': typeof PainelLeadsIndexRoute
+  '/painel/pacotes': typeof PainelPacotesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/painel': typeof PainelRouteWithChildren
+  '/pacotes/$id': typeof PacotesIdRoute
+  '/pacotes/': typeof PacotesIndexRoute
+  '/painel/': typeof PainelIndexRoute
+  '/painel/clientes/$id': typeof PainelClientesIdRoute
+  '/painel/leads/$id': typeof PainelLeadsIdRoute
+  '/painel/clientes/': typeof PainelClientesIndexRoute
+  '/painel/leads/': typeof PainelLeadsIndexRoute
+  '/painel/pacotes/': typeof PainelPacotesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/painel'
+    | '/pacotes/$id'
+    | '/pacotes/'
+    | '/painel/'
+    | '/painel/clientes/$id'
+    | '/painel/leads/$id'
+    | '/painel/clientes/'
+    | '/painel/leads/'
+    | '/painel/pacotes/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth'
-  id: '__root__' | '/' | '/auth'
+  to:
+    | '/'
+    | '/auth'
+    | '/pacotes/$id'
+    | '/pacotes'
+    | '/painel'
+    | '/painel/clientes/$id'
+    | '/painel/leads/$id'
+    | '/painel/clientes'
+    | '/painel/leads'
+    | '/painel/pacotes'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/painel'
+    | '/pacotes/$id'
+    | '/pacotes/'
+    | '/painel/'
+    | '/painel/clientes/$id'
+    | '/painel/leads/$id'
+    | '/painel/clientes/'
+    | '/painel/leads/'
+    | '/painel/pacotes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  PainelRoute: typeof PainelRouteWithChildren
+  PacotesIdRoute: typeof PacotesIdRoute
+  PacotesIndexRoute: typeof PacotesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/painel': {
+      id: '/painel'
+      path: '/painel'
+      fullPath: '/painel'
+      preLoaderRoute: typeof PainelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -65,12 +188,92 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/painel/': {
+      id: '/painel/'
+      path: '/'
+      fullPath: '/painel/'
+      preLoaderRoute: typeof PainelIndexRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/pacotes/': {
+      id: '/pacotes/'
+      path: '/pacotes'
+      fullPath: '/pacotes/'
+      preLoaderRoute: typeof PacotesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pacotes/$id': {
+      id: '/pacotes/$id'
+      path: '/pacotes/$id'
+      fullPath: '/pacotes/$id'
+      preLoaderRoute: typeof PacotesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/painel/pacotes/': {
+      id: '/painel/pacotes/'
+      path: '/pacotes'
+      fullPath: '/painel/pacotes/'
+      preLoaderRoute: typeof PainelPacotesIndexRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/painel/leads/': {
+      id: '/painel/leads/'
+      path: '/leads'
+      fullPath: '/painel/leads/'
+      preLoaderRoute: typeof PainelLeadsIndexRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/painel/clientes/': {
+      id: '/painel/clientes/'
+      path: '/clientes'
+      fullPath: '/painel/clientes/'
+      preLoaderRoute: typeof PainelClientesIndexRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/painel/leads/$id': {
+      id: '/painel/leads/$id'
+      path: '/leads/$id'
+      fullPath: '/painel/leads/$id'
+      preLoaderRoute: typeof PainelLeadsIdRouteImport
+      parentRoute: typeof PainelRoute
+    }
+    '/painel/clientes/$id': {
+      id: '/painel/clientes/$id'
+      path: '/clientes/$id'
+      fullPath: '/painel/clientes/$id'
+      preLoaderRoute: typeof PainelClientesIdRouteImport
+      parentRoute: typeof PainelRoute
+    }
   }
 }
+
+interface PainelRouteChildren {
+  PainelIndexRoute: typeof PainelIndexRoute
+  PainelClientesIdRoute: typeof PainelClientesIdRoute
+  PainelLeadsIdRoute: typeof PainelLeadsIdRoute
+  PainelClientesIndexRoute: typeof PainelClientesIndexRoute
+  PainelLeadsIndexRoute: typeof PainelLeadsIndexRoute
+  PainelPacotesIndexRoute: typeof PainelPacotesIndexRoute
+}
+
+const PainelRouteChildren: PainelRouteChildren = {
+  PainelIndexRoute: PainelIndexRoute,
+  PainelClientesIdRoute: PainelClientesIdRoute,
+  PainelLeadsIdRoute: PainelLeadsIdRoute,
+  PainelClientesIndexRoute: PainelClientesIndexRoute,
+  PainelLeadsIndexRoute: PainelLeadsIndexRoute,
+  PainelPacotesIndexRoute: PainelPacotesIndexRoute,
+}
+
+const PainelRouteWithChildren =
+  PainelRoute._addFileChildren(PainelRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  PainelRoute: PainelRouteWithChildren,
+  PacotesIdRoute: PacotesIdRoute,
+  PacotesIndexRoute: PacotesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
