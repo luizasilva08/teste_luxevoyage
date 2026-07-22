@@ -3,16 +3,17 @@ import { useEffect } from "react";
 import { LayoutDashboard, Users, Workflow, Package, LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, logout } from "../lib/auth";
+import { podeVerVisaoGeral } from "../lib/permissoes";
 
 export const Route = createFileRoute("/painel")({
   component: PainelLayout,
 });
 
 const NAV = [
-  { to: "/painel", label: "Visão geral", icon: LayoutDashboard, exact: true },
-  { to: "/painel/leads", label: "Atendimentos", icon: Workflow },
-  { to: "/painel/clientes", label: "Clientes", icon: Users },
-  { to: "/painel/pacotes", label: "Catálogo", icon: Package },
+  { to: "/painel", label: "Visão geral", icon: LayoutDashboard, exact: true, visivel: podeVerVisaoGeral },
+  { to: "/painel/leads", label: "Atendimentos", icon: Workflow, visivel: () => true },
+  { to: "/painel/clientes", label: "Clientes", icon: Users, visivel: () => true },
+  { to: "/painel/pacotes", label: "Catálogo", icon: Package, visivel: () => true },
 ] as const;
 
 function PainelLayout() {
@@ -23,8 +24,12 @@ function PainelLayout() {
   useEffect(() => {
     if (!carregando && !usuario) {
       navigate({ to: "/auth" });
+      return;
     }
-  }, [carregando, usuario, navigate]);
+    if (usuario && pathname === "/painel" && !podeVerVisaoGeral(usuario)) {
+      navigate({ to: "/painel/leads" });
+    }
+  }, [carregando, usuario, navigate, pathname]);
 
   if (carregando || !usuario) {
     return (
@@ -59,7 +64,7 @@ function PainelLayout() {
         </Link>
 
         <nav className="flex-1 space-y-1 px-4 py-6">
-          {NAV.map((item) => {
+          {NAV.filter((item) => item.visivel(usuario)).map((item) => {
             const ativo =
               "exact" in item && item.exact ? pathname === item.to : pathname.startsWith(item.to);
             const Icon = item.icon;

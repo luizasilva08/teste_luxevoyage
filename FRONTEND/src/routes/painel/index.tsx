@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Users, Package, Handshake, Plane } from "lucide-react";
 import { getDashboard } from "../../lib/painel";
+import { useAuth } from "../../lib/auth";
+import { podeVerVisaoGeral } from "../../lib/permissoes";
 
 export const Route = createFileRoute("/painel/")({
   component: DashboardPage,
@@ -15,7 +17,16 @@ const ICONES: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 function DashboardPage() {
-  const { data, isLoading } = useQuery({ queryKey: ["painel-dashboard"], queryFn: getDashboard });
+  const { usuario } = useAuth();
+  const { data, isLoading } = useQuery({
+    queryKey: ["painel-dashboard"],
+    queryFn: getDashboard,
+    enabled: podeVerVisaoGeral(usuario),
+  });
+
+  if (!podeVerVisaoGeral(usuario)) {
+    return <div className="h-40 animate-pulse rounded-2xl bg-card" />;
+  }
 
   return (
     <div>

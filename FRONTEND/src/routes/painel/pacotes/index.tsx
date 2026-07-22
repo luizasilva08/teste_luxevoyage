@@ -12,12 +12,17 @@ import {
   STATUS_PACOTE,
   type PacoteAdmin,
 } from "../../../lib/painel";
+import { useAuth } from "../../../lib/auth";
+import { podeGerenciarCatalogo, podeExcluir } from "../../../lib/permissoes";
 
 export const Route = createFileRoute("/painel/pacotes/")({
   component: PacotesAdminPage,
 });
 
 function PacotesAdminPage() {
+  const { usuario } = useAuth();
+  const podeEditar = podeGerenciarCatalogo(usuario);
+  const podeApagar = podeExcluir(usuario);
   const queryClient = useQueryClient();
   const [editando, setEditando] = useState<PacoteAdmin | null>(null);
   const [criando, setCriando] = useState(false);
@@ -51,12 +56,14 @@ function PacotesAdminPage() {
             Pacotes que aparecem na vitrine pública.
           </p>
         </div>
-        <button
-          onClick={() => setCriando(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-gold-foreground hover:brightness-95"
-        >
-          <Plus className="h-4 w-4" /> Novo pacote
-        </button>
+        {podeEditar && (
+          <button
+            onClick={() => setCriando(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-gold-foreground hover:brightness-95"
+          >
+            <Plus className="h-4 w-4" /> Novo pacote
+          </button>
+        )}
       </div>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-card">
@@ -66,7 +73,7 @@ function PacotesAdminPage() {
               <th className="px-5 py-3">Nome</th>
               <th className="px-5 py-3">Destino</th>
               <th className="px-5 py-3">Status</th>
-              <th className="px-5 py-3 text-right">Ações</th>
+              {(podeEditar || podeApagar) && <th className="px-5 py-3 text-right">Ações</th>}
             </tr>
           </thead>
           <tbody>
@@ -94,24 +101,30 @@ function PacotesAdminPage() {
                 <td className="px-5 py-3">
                   <StatusBadge status={p.status} />
                 </td>
-                <td className="px-5 py-3">
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setEditando(p)}
-                      className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`Remover "${p.nome_pacote}"?`)) mutDeletar.mutate(p.id_pacote);
-                      }}
-                      className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
+                {(podeEditar || podeApagar) && (
+                  <td className="px-5 py-3">
+                    <div className="flex justify-end gap-2">
+                      {podeEditar && (
+                        <button
+                          onClick={() => setEditando(p)}
+                          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                      {podeApagar && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Remover "${p.nome_pacote}"?`)) mutDeletar.mutate(p.id_pacote);
+                          }}
+                          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

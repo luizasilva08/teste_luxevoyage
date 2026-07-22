@@ -231,7 +231,13 @@ def api_registro():
 # e do endpoint equivalente no Flask.
 # ---------------------------------------------------------------------------
 @app.get("/api/dashboard", tags=["Sistema"])
-def api_dashboard():
+def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
+    if usuario_atual.get("nivel_acesso") not in ("Admin", "Gerente", "Operacoes"):
+        raise HTTPException(
+            status_code=403,
+            detail="A visão geral do negócio é restrita a Admin, Gerente e Operações.",
+        )
+
     def contar(tabela):
         try:
             r = execute_query(f"SELECT COUNT(*) AS total FROM {tabela}", fetch="one")
@@ -539,6 +545,11 @@ def api_painel_oportunidade_detalhe(id_oportunidade: int, usuario_atual: dict = 
 async def api_painel_criar_interacao(
     id_oportunidade: int, request: Request, usuario_atual: dict = Depends(obter_usuario_atual),
 ):
+    if usuario_atual.get("nivel_acesso") not in ("Admin", "Gerente", "Suporte", "Vendedor"):
+        raise HTTPException(
+            status_code=403,
+            detail="Seu perfil só acompanha os atendimentos, sem registrar interações.",
+        )
     oportunidade = _chamar(oportunidade_crm.buscar_oportunidade_por_id, id_oportunidade)
     if oportunidade is None:
         raise HTTPException(status_code=404, detail="Oportunidade não encontrada.")
@@ -557,17 +568,91 @@ async def api_painel_criar_interacao(
 
 
 # ---------------------------------------------------------------------------
+# Permissões por nível de acesso (Usuario_Interno.nivel_acesso).
+#
+# O CRUD genérico abaixo atende as 25 tabelas do REGISTRO, mas nem todo
+# cargo pode fazer qualquer coisa em qualquer tabela — um Vendedor edita
+# leads/clientes, mas não deveria conseguir apagar um Pacote; alguém de
+# Operações monta o catálogo, mas não deveria mexer no funil de vendas.
+#
+# PERMISSOES_TABELA guarda, por (domínio, tabela), quem pode ler/escrever/
+# excluir. O que não está listado cai em _PERMISSAO_PADRAO (mais
+# conservadora: leitura liberada pra qualquer usuário logado, escrita só
+# pra Admin/Gerente, exclusão só pra Admin) — assim, tabelas ainda não
+# usadas pelo front-end também ficam protegidas por padrão.
+# ---------------------------------------------------------------------------
+NIVEIS_ACESSO = ("Admin", "Gerente", "Operacoes", "Suporte", "Vendedor")
+_TODOS_NIVEIS = set(NIVEIS_ACESSO)
+
+_PERMISSAO_PADRAO = {"leitura": _TODOS_NIVEIS, "escrita": {"Admin", "Gerente"}, "exclusao": {"Admin"}}
+
+PERMISSOES_TABELA = {
+    # Funil de vendas: quem atende (Vendedor/Suporte) e quem supervisiona
+    # (Gerente/Admin) move o lead; Operações só acompanha.
+    ("CRM", "Oportunidade_CRM"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Suporte", "Vendedor"},
+        "exclusao": {"Admin"},
+    },
+    ("CRM", "Historico_Interacoes"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Suporte", "Vendedor"},
+        "exclusao": {"Admin"},
+    },
+    # Dados de cliente: qualquer time interno consulta; só liderança edita.
+    ("Clientes", "Cliente"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente"},
+        "exclusao": {"Admin"},
+    },
+    ("Clientes", "Interesses_Cliente"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Suporte", "Vendedor"},
+        "exclusao": {"Admin"},
+    },
+    # Catálogo: Operações monta os pacotes; Vendedor/Suporte só consultam
+    # o que já está publicado pra oferecer ao cliente.
+    ("Catalogo", "Pacote"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+    # Geografia é referência básica (selects de formulário): todo mundo lê,
+    # só quem monta catálogo cadastra município novo.
+    ("Geografia", "Estado"): {"leitura": _TODOS_NIVEIS, "escrita": {"Admin"}, "exclusao": {"Admin"}},
+    ("Geografia", "Municipio"): {
+        "leitura": _TODOS_NIVEIS,
+        "escrita": {"Admin", "Gerente", "Operacoes"},
+        "exclusao": {"Admin"},
+    },
+}
+
+
+def _exigir_permissao(usuario: dict, dominio: str, tabela: str, acao: str):
+    regra = PERMISSOES_TABELA.get((dominio, tabela), _PERMISSAO_PADRAO)
+    permitidos = regra[acao]
+    if usuario.get("nivel_acesso") not in permitidos:
+        raise HTTPException(
+            status_code=403,
+            detail="Seu perfil de acesso não permite essa ação nesta tabela.",
+        )
+
+
+# ---------------------------------------------------------------------------
 # CRUD genérico — funciona para QUALQUER tabela cadastrada em REGISTRO,
 # chamando as mesmas funções (criar_/listar_/buscar_/atualizar_/deletar_)
-# que já existem em TEST/<dominio>/<tabela>.py.
+# que já existem em TEST/<dominio>/<tabela>.py. Toda rota exige login e
+# passa pela checagem de permissão acima antes de tocar no banco.
 # ---------------------------------------------------------------------------
 @app.get("/api/{dominio}/{tabela}", tags=["CRUD"])
 def api_listar(dominio: str, tabela: str, campo: Optional[str] = None,
                 valor: Optional[str] = None, limit: int = Query(20, ge=1, le=1000),
-                offset: int = Query(0, ge=0)):
+                offset: int = Query(0, ge=0),
+                usuario_atual: dict = Depends(obter_usuario_atual)):
     info = _info_ou_none(dominio, tabela)
     if not info:
         raise HTTPException(status_code=404, detail="Domínio/tabela não encontrado.")
+    _exigir_permissao(usuario_atual, dominio, tabela, "leitura")
 
     if campo and valor not in (None, ""):
         colunas_validas = [info["pk"]] + info["cols"]
@@ -586,10 +671,12 @@ def api_listar(dominio: str, tabela: str, campo: Optional[str] = None,
 
 
 @app.get("/api/{dominio}/{tabela}/{id_valor}", tags=["CRUD"])
-def api_buscar_por_id(dominio: str, tabela: str, id_valor: str):
+def api_buscar_por_id(dominio: str, tabela: str, id_valor: str,
+                        usuario_atual: dict = Depends(obter_usuario_atual)):
     info = _info_ou_none(dominio, tabela)
     if not info:
         raise HTTPException(status_code=404, detail="Domínio/tabela não encontrado.")
+    _exigir_permissao(usuario_atual, dominio, tabela, "leitura")
     funcao = getattr(info["mod"], f"buscar_{info['entidade']}_por_id")
     registro = _chamar(funcao, id_valor)
     if registro is None:
@@ -598,10 +685,12 @@ def api_buscar_por_id(dominio: str, tabela: str, id_valor: str):
 
 
 @app.post("/api/{dominio}/{tabela}", tags=["CRUD"], status_code=201)
-async def api_criar(dominio: str, tabela: str, request: Request):
+async def api_criar(dominio: str, tabela: str, request: Request,
+                      usuario_atual: dict = Depends(obter_usuario_atual)):
     info = _info_ou_none(dominio, tabela)
     if not info:
         raise HTTPException(status_code=404, detail="Domínio/tabela não encontrado.")
+    _exigir_permissao(usuario_atual, dominio, tabela, "escrita")
     dados: Dict[str, Any] = await request.json()
     valores = [dados.get(c) or None for c in info["cols"]]
     funcao = getattr(info["mod"], f"criar_{info['entidade']}")
@@ -610,10 +699,12 @@ async def api_criar(dominio: str, tabela: str, request: Request):
 
 
 @app.put("/api/{dominio}/{tabela}/{id_valor}", tags=["CRUD"])
-async def api_atualizar(dominio: str, tabela: str, id_valor: str, request: Request):
+async def api_atualizar(dominio: str, tabela: str, id_valor: str, request: Request,
+                          usuario_atual: dict = Depends(obter_usuario_atual)):
     info = _info_ou_none(dominio, tabela)
     if not info:
         raise HTTPException(status_code=404, detail="Domínio/tabela não encontrado.")
+    _exigir_permissao(usuario_atual, dominio, tabela, "escrita")
     dados: Dict[str, Any] = await request.json()
     campos = {c: dados.get(c) for c in info["cols"] if dados.get(c) not in (None, "")}
     if not campos:
@@ -624,10 +715,12 @@ async def api_atualizar(dominio: str, tabela: str, id_valor: str, request: Reque
 
 
 @app.delete("/api/{dominio}/{tabela}/{id_valor}", tags=["CRUD"])
-def api_deletar(dominio: str, tabela: str, id_valor: str):
+def api_deletar(dominio: str, tabela: str, id_valor: str,
+                  usuario_atual: dict = Depends(obter_usuario_atual)):
     info = _info_ou_none(dominio, tabela)
     if not info:
         raise HTTPException(status_code=404, detail="Domínio/tabela não encontrado.")
+    _exigir_permissao(usuario_atual, dominio, tabela, "exclusao")
     funcao = getattr(info["mod"], f"deletar_{info['entidade']}")
     linhas = _chamar(funcao, id_valor)
     return _json({"mensagem": "Registro excluído com sucesso.", "linhas_afetadas": linhas})
@@ -638,7 +731,9 @@ def api_deletar(dominio: str, tabela: str, id_valor: str):
 # e ao endpoint equivalente no Flask.
 # ---------------------------------------------------------------------------
 @app.post("/api/sql", tags=["Sistema"])
-async def api_sql(request: Request):
+async def api_sql(request: Request, usuario_atual: dict = Depends(obter_usuario_atual)):
+    if usuario_atual.get("nivel_acesso") != "Admin":
+        raise HTTPException(status_code=403, detail="Consulta SQL livre é restrita ao Admin.")
     dados: Dict[str, Any] = await request.json()
     query = (dados.get("query") or "").strip()
     if not query.lower().startswith("select"):
