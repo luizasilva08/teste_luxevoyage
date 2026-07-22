@@ -10,6 +10,7 @@ import {
   ESTAGIOS_FUNIL,
 } from "../../../lib/painel";
 import { useAuth } from "../../../lib/auth";
+import { podeGerenciarAtendimentos } from "../../../lib/permissoes";
 import { formatarPreco, formatarDataHora } from "../../../lib/format";
 
 export const Route = createFileRoute("/painel/leads/$id")({
@@ -21,6 +22,7 @@ function LeadDetalhePage() {
   const idOportunidade = Number(id);
   const queryClient = useQueryClient();
   const { usuario } = useAuth();
+  const podeEditar = podeGerenciarAtendimentos(usuario);
   const [nota, setNota] = useState("");
 
   const { data: lead, isLoading } = useQuery({
@@ -90,31 +92,33 @@ function LeadDetalhePage() {
           <div className="rounded-2xl border border-border bg-card p-6">
             <h2 className="font-display text-xl text-foreground">Histórico de interações</h2>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (nota.trim()) mutInteracao.mutate(nota.trim());
-              }}
-              className="mt-4 flex gap-2"
-            >
-              <input
-                value={nota}
-                onChange={(e) => setNota(e.target.value)}
-                placeholder="Registrar contato: ligação, e-mail, WhatsApp..."
-                className="flex-1 rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
-              />
-              <button
-                type="submit"
-                disabled={mutInteracao.isPending}
-                className="flex items-center gap-1.5 rounded-lg bg-navy px-4 text-sm font-semibold text-navy-foreground hover:opacity-90 disabled:opacity-60"
+            {podeEditar && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (nota.trim()) mutInteracao.mutate(nota.trim());
+                }}
+                className="mt-4 flex gap-2"
               >
-                {mutInteracao.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </button>
-            </form>
+                <input
+                  value={nota}
+                  onChange={(e) => setNota(e.target.value)}
+                  placeholder="Registrar contato: ligação, e-mail, WhatsApp..."
+                  className="flex-1 rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+                />
+                <button
+                  type="submit"
+                  disabled={mutInteracao.isPending}
+                  className="flex items-center gap-1.5 rounded-lg bg-navy px-4 text-sm font-semibold text-navy-foreground hover:opacity-90 disabled:opacity-60"
+                >
+                  {mutInteracao.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </button>
+              </form>
+            )}
 
             <ul className="mt-6 space-y-4">
               {lead.historico.length === 0 && (
@@ -160,9 +164,9 @@ function LeadDetalhePage() {
             </label>
             <select
               value={lead.estagio_funil}
-              disabled={mutAtualizar.isPending}
+              disabled={!podeEditar || mutAtualizar.isPending}
               onChange={(e) => mutAtualizar.mutate({ estagio_funil: e.target.value })}
-              className="mt-2 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
+              className="mt-2 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {ESTAGIOS_FUNIL.map((e) => (
                 <option key={e} value={e}>
@@ -177,7 +181,7 @@ function LeadDetalhePage() {
               Consultor responsável
             </label>
             <p className="mt-2 text-sm text-foreground">{lead.consultor_nome || "Ninguém ainda"}</p>
-            {usuario && lead.id_usuario_interno !== usuario.id_usuario_interno && (
+            {podeEditar && usuario && lead.id_usuario_interno !== usuario.id_usuario_interno && (
               <button
                 onClick={() =>
                   mutAtualizar.mutate({ id_usuario_interno: usuario.id_usuario_interno })
