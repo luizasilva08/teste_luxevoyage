@@ -35,8 +35,8 @@ def buscar_cotacoes_por_campo(campo, valor, limit=100):
     Busca registros de Cotacao_Personalizadas filtrando por um único campo/coluna.
     Ex: buscar_cotacoes_por_campo("status", "Ativo")
     """
-    query = f"SELECT * FROM {TABLE} WHERE {campo} = %s LIMIT %s"
-    return execute_query(query, (valor, limit), fetch="all")
+    query = f"SELECT * FROM {TABLE} WHERE {campo} LIKE %s LIMIT %s"
+    return execute_query(query, (f"%{valor}%", limit), fetch="all")
 
 
 def atualizar_cotacao(id_cotacao, **campos):

@@ -59,6 +59,7 @@ from clientes import interesse_cliente               # noqa: E402
 from crm import oportunidade_crm, historico_interacao  # noqa: E402
 from operacional import pagamento_contrato          # noqa: E402
 from parceiros import avaliacao_parceiro             # noqa: E402
+from criptografia import descriptografar             # noqa: E402
 from auth import (                       # noqa: E402
     checar_senha,
     hash_senha,
@@ -309,7 +310,7 @@ def home():
 # Flask devolve, então o app.js não precisa saber qual dos dois está no ar.
 # ---------------------------------------------------------------------------
 @app.get("/api/registro", tags=["Sistema"])
-def api_registro():
+def api_registro(usuario_atual: dict = Depends(obter_usuario_atual)):
     estrutura = {}
     for dominio, tabelas in REGISTRO.items():
         estrutura[dominio] = {}
@@ -640,6 +641,9 @@ def api_painel_oportunidades(usuario_atual: dict = Depends(obter_usuario_atual))
         ORDER BY o.id_oportunidade DESC
         LIMIT 300
     """, fetch="all") or []
+    for r in registros:
+        r["cliente_email"] = descriptografar(r["cliente_email"])
+        r["cliente_telefone"] = descriptografar(r["cliente_telefone"])
     return _json(registros)
 
 
@@ -656,6 +660,8 @@ def api_painel_oportunidade_detalhe(id_oportunidade: int, usuario_atual: dict = 
     """, (id_oportunidade,), fetch="one")
     if oportunidade is None:
         raise HTTPException(status_code=404, detail="Oportunidade não encontrada.")
+    oportunidade["cliente_email"] = descriptografar(oportunidade["cliente_email"])
+    oportunidade["cliente_telefone"] = descriptografar(oportunidade["cliente_telefone"])
 
     interesses = _chamar(execute_query, """
         SELECT ic.id_interesse, ic.status, m.nome AS destino, e.sigla AS estado_sigla
