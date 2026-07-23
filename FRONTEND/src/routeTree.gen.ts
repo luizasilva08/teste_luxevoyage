@@ -22,8 +22,10 @@ import { Route as PainelPropostasIndexRouteImport } from './routes/painel/propos
 import { Route as PainelPacotesIndexRouteImport } from './routes/painel/pacotes/index'
 import { Route as PainelLeadsIndexRouteImport } from './routes/painel/leads/index'
 import { Route as PainelClientesIndexRouteImport } from './routes/painel/clientes/index'
+import { Route as PainelAdminIndexRouteImport } from './routes/painel/admin/index'
 import { Route as PainelLeadsIdRouteImport } from './routes/painel/leads/$id'
 import { Route as PainelClientesIdRouteImport } from './routes/painel/clientes/$id'
+import { Route as PainelAdminDominioTabelaRouteImport } from './routes/painel/admin/$dominio/$tabela'
 
 const PainelRoute = PainelRouteImport.update({
   id: '/painel',
@@ -90,6 +92,11 @@ const PainelClientesIndexRoute = PainelClientesIndexRouteImport.update({
   path: '/clientes/',
   getParentRoute: () => PainelRoute,
 } as any)
+const PainelAdminIndexRoute = PainelAdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => PainelRoute,
+} as any)
 const PainelLeadsIdRoute = PainelLeadsIdRouteImport.update({
   id: '/leads/$id',
   path: '/leads/$id',
@@ -100,6 +107,12 @@ const PainelClientesIdRoute = PainelClientesIdRouteImport.update({
   path: '/clientes/$id',
   getParentRoute: () => PainelRoute,
 } as any)
+const PainelAdminDominioTabelaRoute =
+  PainelAdminDominioTabelaRouteImport.update({
+    id: '/admin/$dominio/$tabela',
+    path: '/admin/$dominio/$tabela',
+    getParentRoute: () => PainelRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -112,11 +125,13 @@ export interface FileRoutesByFullPath {
   '/painel/': typeof PainelIndexRoute
   '/painel/clientes/$id': typeof PainelClientesIdRoute
   '/painel/leads/$id': typeof PainelLeadsIdRoute
+  '/painel/admin/': typeof PainelAdminIndexRoute
   '/painel/clientes/': typeof PainelClientesIndexRoute
   '/painel/leads/': typeof PainelLeadsIndexRoute
   '/painel/pacotes/': typeof PainelPacotesIndexRoute
   '/painel/propostas/': typeof PainelPropostasIndexRoute
   '/painel/viagens/': typeof PainelViagensIndexRoute
+  '/painel/admin/$dominio/$tabela': typeof PainelAdminDominioTabelaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -128,11 +143,13 @@ export interface FileRoutesByTo {
   '/painel': typeof PainelIndexRoute
   '/painel/clientes/$id': typeof PainelClientesIdRoute
   '/painel/leads/$id': typeof PainelLeadsIdRoute
+  '/painel/admin': typeof PainelAdminIndexRoute
   '/painel/clientes': typeof PainelClientesIndexRoute
   '/painel/leads': typeof PainelLeadsIndexRoute
   '/painel/pacotes': typeof PainelPacotesIndexRoute
   '/painel/propostas': typeof PainelPropostasIndexRoute
   '/painel/viagens': typeof PainelViagensIndexRoute
+  '/painel/admin/$dominio/$tabela': typeof PainelAdminDominioTabelaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -146,11 +163,13 @@ export interface FileRoutesById {
   '/painel/': typeof PainelIndexRoute
   '/painel/clientes/$id': typeof PainelClientesIdRoute
   '/painel/leads/$id': typeof PainelLeadsIdRoute
+  '/painel/admin/': typeof PainelAdminIndexRoute
   '/painel/clientes/': typeof PainelClientesIndexRoute
   '/painel/leads/': typeof PainelLeadsIndexRoute
   '/painel/pacotes/': typeof PainelPacotesIndexRoute
   '/painel/propostas/': typeof PainelPropostasIndexRoute
   '/painel/viagens/': typeof PainelViagensIndexRoute
+  '/painel/admin/$dominio/$tabela': typeof PainelAdminDominioTabelaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -165,11 +184,13 @@ export interface FileRouteTypes {
     | '/painel/'
     | '/painel/clientes/$id'
     | '/painel/leads/$id'
+    | '/painel/admin/'
     | '/painel/clientes/'
     | '/painel/leads/'
     | '/painel/pacotes/'
     | '/painel/propostas/'
     | '/painel/viagens/'
+    | '/painel/admin/$dominio/$tabela'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -181,11 +202,13 @@ export interface FileRouteTypes {
     | '/painel'
     | '/painel/clientes/$id'
     | '/painel/leads/$id'
+    | '/painel/admin'
     | '/painel/clientes'
     | '/painel/leads'
     | '/painel/pacotes'
     | '/painel/propostas'
     | '/painel/viagens'
+    | '/painel/admin/$dominio/$tabela'
   id:
     | '__root__'
     | '/'
@@ -198,11 +221,13 @@ export interface FileRouteTypes {
     | '/painel/'
     | '/painel/clientes/$id'
     | '/painel/leads/$id'
+    | '/painel/admin/'
     | '/painel/clientes/'
     | '/painel/leads/'
     | '/painel/pacotes/'
     | '/painel/propostas/'
     | '/painel/viagens/'
+    | '/painel/admin/$dominio/$tabela'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -308,6 +333,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PainelClientesIndexRouteImport
       parentRoute: typeof PainelRoute
     }
+    '/painel/admin/': {
+      id: '/painel/admin/'
+      path: '/admin'
+      fullPath: '/painel/admin/'
+      preLoaderRoute: typeof PainelAdminIndexRouteImport
+      parentRoute: typeof PainelRoute
+    }
     '/painel/leads/$id': {
       id: '/painel/leads/$id'
       path: '/leads/$id'
@@ -322,6 +354,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PainelClientesIdRouteImport
       parentRoute: typeof PainelRoute
     }
+    '/painel/admin/$dominio/$tabela': {
+      id: '/painel/admin/$dominio/$tabela'
+      path: '/admin/$dominio/$tabela'
+      fullPath: '/painel/admin/$dominio/$tabela'
+      preLoaderRoute: typeof PainelAdminDominioTabelaRouteImport
+      parentRoute: typeof PainelRoute
+    }
   }
 }
 
@@ -329,22 +368,26 @@ interface PainelRouteChildren {
   PainelIndexRoute: typeof PainelIndexRoute
   PainelClientesIdRoute: typeof PainelClientesIdRoute
   PainelLeadsIdRoute: typeof PainelLeadsIdRoute
+  PainelAdminIndexRoute: typeof PainelAdminIndexRoute
   PainelClientesIndexRoute: typeof PainelClientesIndexRoute
   PainelLeadsIndexRoute: typeof PainelLeadsIndexRoute
   PainelPacotesIndexRoute: typeof PainelPacotesIndexRoute
   PainelPropostasIndexRoute: typeof PainelPropostasIndexRoute
   PainelViagensIndexRoute: typeof PainelViagensIndexRoute
+  PainelAdminDominioTabelaRoute: typeof PainelAdminDominioTabelaRoute
 }
 
 const PainelRouteChildren: PainelRouteChildren = {
   PainelIndexRoute: PainelIndexRoute,
   PainelClientesIdRoute: PainelClientesIdRoute,
   PainelLeadsIdRoute: PainelLeadsIdRoute,
+  PainelAdminIndexRoute: PainelAdminIndexRoute,
   PainelClientesIndexRoute: PainelClientesIndexRoute,
   PainelLeadsIndexRoute: PainelLeadsIndexRoute,
   PainelPacotesIndexRoute: PainelPacotesIndexRoute,
   PainelPropostasIndexRoute: PainelPropostasIndexRoute,
   PainelViagensIndexRoute: PainelViagensIndexRoute,
+  PainelAdminDominioTabelaRoute: PainelAdminDominioTabelaRoute,
 }
 
 const PainelRouteWithChildren =
