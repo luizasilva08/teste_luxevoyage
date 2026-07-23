@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import {
-  LayoutDashboard, Users, Workflow, Package, FileSignature, Plane, Database, LogOut, Loader2,
+  LayoutDashboard, Users, Workflow, Package, FileSignature, Plane, Database, BarChart3, LogOut, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, logout } from "../lib/auth";
@@ -18,6 +18,7 @@ const NAV = [
   { to: "/painel/viagens", label: "Viagens", icon: Plane, visivel: () => true },
   { to: "/painel/clientes", label: "Clientes", icon: Users, visivel: () => true },
   { to: "/painel/pacotes", label: "Catálogo", icon: Package, visivel: () => true },
+  { to: "/painel/relatorios", label: "Relatórios", icon: BarChart3, visivel: () => true },
   { to: "/painel/admin", label: "Administração", icon: Database, visivel: podeAdministrarTudo },
 ] as const;
 

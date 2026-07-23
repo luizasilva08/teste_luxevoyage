@@ -60,6 +60,10 @@ from crm import oportunidade_crm, historico_interacao  # noqa: E402
 from operacional import pagamento_contrato          # noqa: E402
 from parceiros import avaliacao_parceiro             # noqa: E402
 from criptografia import descriptografar             # noqa: E402
+from relatorios import (                              # noqa: E402
+    listar_para_nivel as listar_relatorios_para_nivel,
+    obter as obter_relatorio,
+)
 from auth import (                       # noqa: E402
     checar_senha,
     hash_senha,
@@ -801,6 +805,27 @@ def api_painel_viagens(usuario_atual: dict = Depends(obter_usuario_atual)):
         LIMIT 400
     """, fetch="all") or []
     return _json(registros)
+
+
+# ---------------------------------------------------------------------------
+# Relatórios — catálogo fixo de consultas prontas (relatorios.py), cada
+# uma com os níveis de acesso que podem vê-la. Diferente do "SQL livre"
+# (/api/sql): aqui não existe texto de query vindo do front, só um id
+# escolhido de uma lista — zero risco de injeção ou de alguém rodar uma
+# consulta pesada por engano.
+# ---------------------------------------------------------------------------
+@app.get("/api/painel/relatorios", tags=["Painel"])
+def api_painel_relatorios(usuario_atual: dict = Depends(obter_usuario_atual)):
+    return _json(listar_relatorios_para_nivel(usuario_atual["nivel_acesso"]))
+
+
+@app.get("/api/painel/relatorios/{id_relatorio}/executar", tags=["Painel"])
+def api_painel_executar_relatorio(id_relatorio: str, usuario_atual: dict = Depends(obter_usuario_atual)):
+    relatorio = obter_relatorio(id_relatorio, usuario_atual["nivel_acesso"])
+    if relatorio is None:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado ou sem permissão pro seu perfil.")
+    registros = _chamar(execute_query, relatorio["sql"], fetch="all") or []
+    return _json({"titulo": relatorio["titulo"], "registros": registros, "total": len(registros)})
 
 
 # ---------------------------------------------------------------------------
