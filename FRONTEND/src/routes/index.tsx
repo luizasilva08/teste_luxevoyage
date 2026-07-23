@@ -65,6 +65,8 @@ function Home() {
 function Hero() {
   const [travelers, setTravelers] = useState(2);
   const [busca, setBusca] = useState("");
+  const [dataIda, setDataIda] = useState("");
+  const [dataVolta, setDataVolta] = useState("");
 
   return (
     <section className="relative">
@@ -113,10 +115,24 @@ function Hero() {
             />
           </Field>
           <Field icon={<Calendar className="h-4 w-4 text-gold" />} label="IDA E VOLTA">
-            <input
-              placeholder="Selecione as datas"
-              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
+            <div className="flex items-center gap-1.5 text-sm">
+              <input
+                type="date"
+                aria-label="Data de ida"
+                value={dataIda}
+                onChange={(e) => setDataIda(e.target.value)}
+                className="w-full min-w-0 bg-transparent text-sm outline-none [color-scheme:light]"
+              />
+              <span className="shrink-0 text-muted-foreground">→</span>
+              <input
+                type="date"
+                aria-label="Data de volta"
+                value={dataVolta}
+                min={dataIda || undefined}
+                onChange={(e) => setDataVolta(e.target.value)}
+                className="w-full min-w-0 bg-transparent text-sm outline-none [color-scheme:light]"
+              />
+            </div>
           </Field>
           <Field icon={<Users className="h-4 w-4 text-gold" />} label="VIAJANTES">
             <div className="flex items-center gap-3 text-sm">

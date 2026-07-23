@@ -11,6 +11,7 @@ import {
 } from "../ui/dialog";
 import { solicitarCotacao } from "../../lib/catalogo";
 import { ApiError } from "../../lib/api";
+import { maskTelefone, maskCPF, maskCEP } from "../../lib/mascaras";
 
 type QuoteDialogProps = {
   trigger: React.ReactNode;
@@ -28,6 +29,9 @@ export function QuoteDialog({
   const [open, setOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  const [telefone, setTelefone] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [cep, setCep] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -39,9 +43,9 @@ export function QuoteDialog({
       await solicitarCotacao({
         nome: String(form.get("nome") || ""),
         email: String(form.get("email") || ""),
-        telefone: String(form.get("telefone") || "") || undefined,
-        cpf: String(form.get("cpf") || "") || undefined,
-        cep: String(form.get("cep") || "") || undefined,
+        telefone: telefone || undefined,
+        cpf: cpf || undefined,
+        cep: cep || undefined,
         mensagem: String(form.get("mensagem") || "") || undefined,
         id_pacote: idPacote,
         id_municipio_destino: idMunicipioDestino,
@@ -60,7 +64,14 @@ export function QuoteDialog({
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
-    if (!next) setTimeout(() => setEnviado(false), 300);
+    if (!next) {
+      setTimeout(() => {
+        setEnviado(false);
+        setTelefone("");
+        setCpf("");
+        setCep("");
+      }, 300);
+    }
   }
 
   return (
@@ -113,7 +124,12 @@ export function QuoteDialog({
                   <label className="text-sm font-medium text-foreground">Telefone</label>
                   <input
                     name="telefone"
+                    type="tel"
+                    inputMode="numeric"
+                    value={telefone}
+                    onChange={(e) => setTelefone(maskTelefone(e.target.value))}
                     placeholder="(00) 00000-0000"
+                    maxLength={15}
                     className="mt-1.5 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
                   />
                 </div>
@@ -123,7 +139,11 @@ export function QuoteDialog({
                   <label className="text-sm font-medium text-foreground">CPF</label>
                   <input
                     name="cpf"
+                    inputMode="numeric"
+                    value={cpf}
+                    onChange={(e) => setCpf(maskCPF(e.target.value))}
                     placeholder="000.000.000-00"
+                    maxLength={14}
                     className="mt-1.5 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
                   />
                 </div>
@@ -131,7 +151,11 @@ export function QuoteDialog({
                   <label className="text-sm font-medium text-foreground">CEP (opcional)</label>
                   <input
                     name="cep"
+                    inputMode="numeric"
+                    value={cep}
+                    onChange={(e) => setCep(maskCEP(e.target.value))}
                     placeholder="00000-000"
+                    maxLength={9}
                     className="mt-1.5 w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none focus:border-gold focus:ring-2 focus:ring-gold/30"
                   />
                 </div>
