@@ -3,6 +3,7 @@ import { LogIn, LogOut, UserCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth, logout } from "../../lib/auth";
 import { useClienteAuth, clienteLogout } from "../../lib/cliente";
+import logoMark from "../../assets/logo-mark.svg";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/" as const },
@@ -30,8 +31,8 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
         <Link to="/" className="flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-navy text-navy-foreground font-display text-xl">
-            L
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-navy">
+            <img src={logoMark} alt="" className="h-5 w-5" />
           </span>
           <span className="leading-tight">
             <span className="block font-display text-xl text-foreground">Luxe Voyage</span>

@@ -12,6 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import concierge from "../assets/login-concierge.jpg";
+import logoMark from "../assets/logo-mark.svg";
 import { ApiError } from "../lib/api";
 import { login } from "../lib/auth";
 
@@ -70,8 +71,8 @@ function AuthPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-navy/70 via-navy/10 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 flex items-center justify-between p-8 text-navy-foreground">
             <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-full border border-gold/70 font-display text-xl text-gold">
-                L
+              <span className="grid h-11 w-11 place-items-center rounded-full border border-gold/70">
+                <img src={logoMark} alt="" className="h-5 w-5" />
               </span>
               <span className="font-display text-2xl">Luxe Voyage</span>
             </div>

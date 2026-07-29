@@ -6,6 +6,7 @@ import {
 import { toast } from "sonner";
 import { useAuth, logout } from "../lib/auth";
 import { podeVerVisaoGeral, podeGerenciarPropostas, podeAdministrarTudo } from "../lib/permissoes";
+import logoMark from "../assets/logo-mark.svg";
 
 export const Route = createFileRoute("/painel")({
   component: PainelLayout,
@@ -58,8 +59,8 @@ function PainelLayout() {
           to="/"
           className="flex items-center gap-3 border-b border-navy-foreground/10 px-6 py-6"
         >
-          <span className="grid h-10 w-10 place-items-center rounded-full border border-gold/60 font-display text-lg text-gold">
-            L
+          <span className="grid h-10 w-10 place-items-center rounded-full border border-gold/60">
+            <img src={logoMark} alt="" className="h-4 w-4" />
           </span>
           <span>
             <span className="block font-display text-lg">Luxe Voyage</span>

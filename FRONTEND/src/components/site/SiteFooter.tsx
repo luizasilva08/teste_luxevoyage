@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Facebook, Instagram, Twitter, Linkedin } from "lucide-react";
+import logoMark from "../../assets/logo-mark.svg";
 
 function FooterCol({ title, items }: { title: string; items: string[] }) {
   return (
@@ -25,8 +26,8 @@ export function SiteFooter() {
         <div className="grid gap-10 md:grid-cols-4">
           <div>
             <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-full border border-gold/60 font-display text-gold">
-                L
+              <span className="grid h-10 w-10 place-items-center rounded-full border border-gold/60">
+                <img src={logoMark} alt="" className="h-4 w-4" />
               </span>
               <span className="font-display text-2xl">Luxe Voyage</span>
             </div>
