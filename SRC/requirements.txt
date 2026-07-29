@@ -12,3 +12,4 @@ uvicorn
 bcrypt
 pyjwt
 cryptography
+pydantic[email]
