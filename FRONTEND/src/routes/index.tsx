@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -16,6 +16,7 @@ import {
 import { SiteHeader } from "../components/site/SiteHeader";
 import { SiteFooter } from "../components/site/SiteFooter";
 import { QuoteDialog } from "../components/site/QuoteDialog";
+import { DestinoCombobox } from "../components/site/DestinoCombobox";
 import { listarDestinos, listarPacotes, type Destino, type PacoteResumo } from "../lib/catalogo";
 import { imagemDestino, heroNoronha } from "../lib/imagens";
 import { formatarPreco } from "../lib/format";
@@ -63,6 +64,7 @@ function Home() {
 }
 
 function Hero() {
+  const navigate = useNavigate();
   const [travelers, setTravelers] = useState(2);
   const [busca, setBusca] = useState("");
   const [dataIda, setDataIda] = useState("");
@@ -107,11 +109,16 @@ function Hero() {
           className="grid gap-2 rounded-2xl border border-border bg-card p-4 shadow-[0_20px_60px_-25px_rgba(15,27,61,0.35)] md:grid-cols-[1.2fr_1fr_0.8fr_auto]"
         >
           <Field icon={<MapPin className="h-4 w-4 text-gold" />} label="DESTINO">
-            <input
+            <DestinoCombobox
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Para onde vamos? Ex: Bahia, Gramado..."
-              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              onChange={setBusca}
+              onSelecionarDestino={(d) => {
+                setBusca(d.destino);
+                navigate({ to: "/pacotes", search: { busca: d.destino, estado: d.estado_sigla } });
+              }}
+              onSelecionarRegiao={(regiao) => {
+                navigate({ to: "/pacotes", search: { regiao } });
+              }}
             />
           </Field>
           <Field icon={<Calendar className="h-4 w-4 text-gold" />} label="IDA E VOLTA">
