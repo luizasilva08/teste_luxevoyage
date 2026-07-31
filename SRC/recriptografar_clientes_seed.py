@@ -69,6 +69,7 @@ def main():
         return
 
     atualizados = 0
+    total = len(valores)
     for id_cliente, (cpf, email, telefone) in valores.items():
         query = (
             "UPDATE Cliente SET cpf_criptografado = %s, email_criptografado = %s, "
@@ -77,6 +78,10 @@ def main():
         params = (criptografar(cpf), criptografar(email), criptografar(telefone), id_cliente)
         execute_query(query, params, commit=True)
         atualizados += 1
+        # print com flush a cada linha -- sem isso a tela fica muda por
+        # todo o tempo do loop (200 round-trips até o banco na nuvem) e
+        # parece travado mesmo quando só está lento
+        print(f"  [{atualizados}/{total}] cliente id={id_cliente} atualizado", flush=True)
 
     print(f"\nPronto: {atualizados} cliente(s) recriptografado(s) com a chave atual.")
     print("Confira no site se os dados desses clientes já aparecem legíveis.")
