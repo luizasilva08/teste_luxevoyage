@@ -29,6 +29,7 @@ ou suba o front-end (FRONTEND/, npm run dev) e acesse http://localhost:3000
 — veja o README raiz do projeto para o passo a passo dos dois juntos.
 """
 import os
+import re
 import sys
 import pathlib
 import decimal
@@ -138,6 +139,46 @@ def _chamar(funcao, *args, **kwargs):
     try:
         return funcao(*args, **kwargs)
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Erro cru do MySQL quando um DELETE esbarra numa FK de outra tabela:
+# "... a foreign key constraint fails (`banco`.`tabela_dependente`, CONSTRAINT ...)"
+# O grupo capturado é o nome físico da tabela que ainda tem registros apontando
+# pro que se tentou excluir.
+_PADRAO_FK_AO_EXCLUIR = re.compile(r"constraint fails \(`[^`]+`\.`([^`]+)`")
+
+
+def _tabela_por_nome_fisico(nome_fisico: str):
+    """Acha (domínio, tabela) no REGISTRO cujo nome bate com o nome físico que
+    veio no erro do MySQL (a capitalização pode não ser idêntica)."""
+    alvo = nome_fisico.lower()
+    for dominio, tabelas in REGISTRO.items():
+        for tabela in tabelas:
+            if tabela.lower() == alvo:
+                return dominio, tabela
+    return None, nome_fisico
+
+
+def _chamar_delecao(funcao, *args, **kwargs):
+    """Igual a _chamar, mas traduz o erro de FK do MySQL (linha ainda referenciada
+    por outra tabela) numa mensagem que diz ONDE excluir primeiro, em vez do
+    erro cru do banco."""
+    try:
+        return funcao(*args, **kwargs)
+    except Exception as e:
+        casamento = _PADRAO_FK_AO_EXCLUIR.search(str(e))
+        if casamento:
+            dominio_dep, tabela_dep = _tabela_por_nome_fisico(casamento.group(1))
+            onde = f'"{tabela_dep}" (domínio {dominio_dep})' if dominio_dep else f'"{tabela_dep}"'
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Não é possível excluir: ainda existem registros dependentes na tabela "
+                    f"{onde}. Exclua esses registros primeiro (ou o cadastro correspondente na "
+                    f"aba certa do painel) e tente novamente."
+                ),
+            )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1262,7 +1303,7 @@ def api_deletar(dominio: str, tabela: str, id_valor: str,
         raise HTTPException(status_code=404, detail="Domínio/tabela não encontrado.")
     _exigir_permissao(usuario_atual, dominio, tabela, "exclusao")
     funcao = getattr(info["mod"], f"deletar_{info['entidade']}")
-    linhas = _chamar(funcao, id_valor)
+    linhas = _chamar_delecao(funcao, id_valor)
     return _json({"mensagem": "Registro excluído com sucesso.", "linhas_afetadas": linhas})
 
 
