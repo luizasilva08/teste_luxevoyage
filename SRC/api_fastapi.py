@@ -41,6 +41,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -125,6 +126,12 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Comprime respostas JSON acima de 1KB antes de mandar pro front — o
+# catálogo de pacotes/destinos facilmente passa disso, e em conexão
+# lenta (celular, rede ruim) o tempo de download do JSON pesa tanto
+# quanto o tempo de banco.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 def _info_ou_none(dominio: str, tabela: str):

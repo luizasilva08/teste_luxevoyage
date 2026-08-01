@@ -28,7 +28,17 @@ def _obter_pool():
         _POOL = pooling.MySQLConnectionPool(
             pool_name="luxevoyage_pool",
             pool_size=10,             # até 10 conexões simultâneas reaproveitáveis
-            pool_reset_session=True,
+            # False porque nós mesmos controlamos o único estado de sessão que
+            # importa aqui (o time_zone, logo abaixo) com um "só roda uma vez
+            # por conexão física". Com True (o padrão), o connector reseta a
+            # sessão TODA VEZ que a conexão volta pro pool — o que forçava o
+            # SET time_zone de novo em TODA query, dobrando o número de
+            # round-trips até o banco (um só pra fazer o SET, outro pra
+            # query de verdade). Como o resto do código nunca deixa
+            # transação aberta nem muda outro estado de sessão (sempre
+            # comita ou não mexe, sempre fecha o cursor), não tem nada mais
+            # pra "vazar" entre usos — desligar o reset aqui é seguro.
+            pool_reset_session=False,
             host=os.environ["DB_HOST"],
             port=int(os.environ["DB_PORT"]),
             user=os.environ["DB_USER"],
@@ -47,10 +57,15 @@ def get_connection():
     """
     connection = _obter_pool().get_connection()
 
-    # Necessário pelo Aiven: o timezone da sessão não é global,
-    # então é preciso setar a cada conexão nova (igual ao script de inserts).
-    cursor = connection.cursor()
-    cursor.execute("SET time_zone = 'America/Sao_Paulo'")
-    cursor.close()
+    # Necessário pelo Aiven: o timezone da sessão não é global. Só precisa
+    # ser setado uma vez POR CONEXÃO FÍSICA (não uma vez por query) — com
+    # pool_reset_session=False acima, a sessão sobrevive entre checkouts,
+    # então um atributo Python simples na própria conexão já basta pra
+    # saber se esse SET já rodou nela antes.
+    if not getattr(connection, "_timezone_configurado", False):
+        cursor = connection.cursor()
+        cursor.execute("SET time_zone = 'America/Sao_Paulo'")
+        cursor.close()
+        connection._timezone_configurado = True
 
     return connection
