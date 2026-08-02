@@ -779,7 +779,22 @@ def api_painel_oportunidades(usuario_atual: dict = Depends(obter_usuario_atual))
         SELECT o.id_oportunidade, o.estagio_funil, o.valor_estimado,
                o.id_cliente, c.nome AS cliente_nome, c.email_criptografado AS cliente_email,
                c.telefone_criptografado AS cliente_telefone,
-               o.id_usuario_interno, u.nome AS consultor_nome
+               o.id_usuario_interno, u.nome AS consultor_nome,
+               (SELECT m.nome
+                  FROM Interesses_Cliente ic
+                  JOIN Municipio m ON m.id_municipio = ic.id_municipio_destino
+                 WHERE ic.id_cliente = o.id_cliente
+                 ORDER BY ic.id_interesse DESC LIMIT 1) AS destino,
+               (SELECT e.sigla
+                  FROM Interesses_Cliente ic
+                  JOIN Municipio m ON m.id_municipio = ic.id_municipio_destino
+                  JOIN Estado e ON e.id_estado = m.id_estado
+                 WHERE ic.id_cliente = o.id_cliente
+                 ORDER BY ic.id_interesse DESC LIMIT 1) AS estado_sigla,
+               (SELECT MAX(hi.data_interacao) FROM Historico_Interacoes hi
+                 WHERE hi.id_oportunidade = o.id_oportunidade) AS ultima_atividade,
+               (SELECT COUNT(*) FROM Historico_Interacoes hi
+                 WHERE hi.id_oportunidade = o.id_oportunidade) AS total_interacoes
         FROM Oportunidade_CRM o
         JOIN Cliente c ON c.id_cliente = o.id_cliente
         LEFT JOIN Usuario_Interno u ON u.id_usuario_interno = o.id_usuario_interno

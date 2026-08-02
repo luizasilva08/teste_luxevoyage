@@ -78,10 +78,23 @@ export type OportunidadePainel = {
   cliente_telefone: string | null;
   id_usuario_interno: number | null;
   consultor_nome: string | null;
+  destino: string | null;
+  estado_sigla: string | null;
+  ultima_atividade: string | null;
+  total_interacoes: number;
 };
 
 export function listarOportunidades(): Promise<OportunidadePainel[]> {
   return apiFetch<OportunidadePainel[]>("/api/painel/oportunidades");
+}
+
+export function criarOportunidade(dados: {
+  id_cliente: number;
+  estagio_funil: string;
+  valor_estimado?: number;
+  id_usuario_interno?: number;
+}) {
+  return apiFetch<{ id: number }>("/api/CRM/Oportunidade_CRM", { method: "POST", body: dados });
 }
 
 export type OportunidadeDetalhe = OportunidadePainel & {
