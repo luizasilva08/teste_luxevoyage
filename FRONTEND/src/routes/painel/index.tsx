@@ -10,6 +10,8 @@ import {
   UserPlus,
   BarChart3,
   Clock,
+  PackagePlus,
+  PenLine,
 } from "lucide-react";
 import { getDashboard } from "../../lib/painel";
 import { useAuth } from "../../lib/auth";
@@ -82,6 +84,10 @@ function DashboardPage() {
   const viagensConfirmadas = data.viagens_status
     .filter((v) => /confirmad|andamento/i.test(v.rotulo))
     .reduce((s, v) => s + v.total, 0);
+  const pacotesPublicados = (data.pacotes_status ?? [])
+    .filter((p) => /publicad|ativo/i.test(p.rotulo))
+    .reduce((s, p) => s + p.total, 0);
+  const pacotesPendentes = (data.pacotes_atencao ?? []).length;
 
   return (
     <div className="space-y-6">
@@ -99,44 +105,85 @@ function DashboardPage() {
         <p className="text-sm capitalize text-muted-foreground">{dataDeHoje()}</p>
       </div>
 
-      {data.escopo === "comercial" && (
-        <div className="relative overflow-hidden rounded-2xl">
-          <img src={heroNoronha} alt="" className="h-56 w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-navy/85 via-navy/55 to-navy/10" />
-          <div className="absolute inset-0 flex flex-col justify-between p-6">
-            <div className="flex flex-wrap gap-6 text-navy-foreground">
-              <div>
-                <p className="font-display text-3xl">{oportunidadesAtivas}</p>
-                <p className="text-sm text-navy-foreground/75">oportunidades ativas</p>
+      <div className="relative overflow-hidden rounded-2xl">
+        <img src={heroNoronha} alt="" className="h-56 w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-r from-navy/85 via-navy/55 to-navy/10" />
+        <div className="absolute inset-0 flex flex-col justify-between p-6">
+          {data.escopo === "comercial" ? (
+            <>
+              <div className="flex flex-wrap gap-6 text-navy-foreground">
+                <div>
+                  <p className="font-display text-3xl">{oportunidadesAtivas}</p>
+                  <p className="text-sm text-navy-foreground/75">oportunidades ativas</p>
+                </div>
+                <div>
+                  <p className="font-display text-3xl">{viagensConfirmadas}</p>
+                  <p className="text-sm text-navy-foreground/75">viagens confirmadas ou em andamento</p>
+                </div>
               </div>
-              <div>
-                <p className="font-display text-3xl">{viagensConfirmadas}</p>
-                <p className="text-sm text-navy-foreground/75">viagens confirmadas ou em andamento</p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to="/painel/leads"
+                  className="flex items-center gap-2 rounded-full bg-gold px-4 py-2 text-sm font-semibold text-gold-foreground hover:brightness-95"
+                >
+                  <UserPlus className="h-4 w-4" /> Nova Cotação
+                </Link>
+                <Link
+                  to="/painel/clientes"
+                  className="flex items-center gap-2 rounded-full border border-navy-foreground/40 bg-navy-foreground/10 px-4 py-2 text-sm font-semibold text-navy-foreground hover:bg-navy-foreground/20"
+                >
+                  <Users className="h-4 w-4" /> Novo Cliente
+                </Link>
+                <Link
+                  to="/painel/relatorios"
+                  className="flex items-center gap-2 rounded-full border border-navy-foreground/40 bg-navy-foreground/10 px-4 py-2 text-sm font-semibold text-navy-foreground hover:bg-navy-foreground/20"
+                >
+                  <BarChart3 className="h-4 w-4" /> Ver Relatórios
+                </Link>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                to="/painel/leads"
-                className="flex items-center gap-2 rounded-full bg-gold px-4 py-2 text-sm font-semibold text-gold-foreground hover:brightness-95"
-              >
-                <UserPlus className="h-4 w-4" /> Nova Cotação
-              </Link>
-              <Link
-                to="/painel/clientes"
-                className="flex items-center gap-2 rounded-full border border-navy-foreground/40 bg-navy-foreground/10 px-4 py-2 text-sm font-semibold text-navy-foreground hover:bg-navy-foreground/20"
-              >
-                <Users className="h-4 w-4" /> Novo Cliente
-              </Link>
-              <Link
-                to="/painel/relatorios"
-                className="flex items-center gap-2 rounded-full border border-navy-foreground/40 bg-navy-foreground/10 px-4 py-2 text-sm font-semibold text-navy-foreground hover:bg-navy-foreground/20"
-              >
-                <BarChart3 className="h-4 w-4" /> Ver Relatórios
-              </Link>
-            </div>
-          </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-6 text-navy-foreground">
+                <div>
+                  <p className="font-display text-3xl">{pacotesPublicados}</p>
+                  <p className="text-sm text-navy-foreground/75">pacotes publicados/ativos</p>
+                </div>
+                <div>
+                  <p className="font-display text-3xl">{viagensConfirmadas}</p>
+                  <p className="text-sm text-navy-foreground/75">viagens confirmadas ou em andamento</p>
+                </div>
+                {pacotesPendentes > 0 && (
+                  <div>
+                    <p className="font-display text-3xl">{pacotesPendentes}</p>
+                    <p className="text-sm text-navy-foreground/75">pacotes precisando de atenção</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to="/painel/pacotes"
+                  className="flex items-center gap-2 rounded-full bg-gold px-4 py-2 text-sm font-semibold text-gold-foreground hover:brightness-95"
+                >
+                  <PackagePlus className="h-4 w-4" /> Novo Pacote
+                </Link>
+                <Link
+                  to="/painel/viagens"
+                  className="flex items-center gap-2 rounded-full border border-navy-foreground/40 bg-navy-foreground/10 px-4 py-2 text-sm font-semibold text-navy-foreground hover:bg-navy-foreground/20"
+                >
+                  <Plane className="h-4 w-4" /> Ver Viagens
+                </Link>
+                <Link
+                  to="/painel/pacotes"
+                  className="flex items-center gap-2 rounded-full border border-navy-foreground/40 bg-navy-foreground/10 px-4 py-2 text-sm font-semibold text-navy-foreground hover:bg-navy-foreground/20"
+                >
+                  <Package className="h-4 w-4" /> Ver Catálogo
+                </Link>
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       <div
         className={`grid gap-4 sm:grid-cols-2 ${data.escopo === "comercial" ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}
@@ -159,10 +206,22 @@ function DashboardPage() {
       </div>
 
       {data.escopo === "operacional" ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <PainelBarras titulo="Pacotes por status" dados={data.pacotes_status ?? []} />
-          <PainelBarras titulo="Viagens por status" dados={data.viagens_status} />
-        </div>
+        <>
+          <div className="grid gap-6 lg:grid-cols-3">
+            <PainelBarras titulo="Pacotes por status" dados={data.pacotes_status ?? []} />
+            <PainelBarras titulo="Viagens por status" dados={data.viagens_status} />
+            <ProximosEmbarques dados={data.proximos_embarques ?? []} />
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            <PacotesAtencao dados={data.pacotes_atencao ?? []} />
+            <DestinosMaisVendidos
+              titulo="Destinos mais movimentados"
+              dados={data.destinos_mais_vendidos ?? []}
+            />
+            <MapaViagensPainel dados={data.viagens_por_estado ?? []} />
+          </div>
+        </>
       ) : (
         <>
           <div className="grid gap-6 lg:grid-cols-3">
@@ -365,14 +424,16 @@ function PainelReceita({ receita }: { receita?: import("../../lib/painel").Recei
 }
 
 function DestinosMaisVendidos({
+  titulo = "Destinos mais vendidos",
   dados,
 }: {
+  titulo?: string;
   dados: { destino: string; estado_sigla: string; total: number }[];
 }) {
   const max = Math.max(1, ...dados.map((d) => d.total));
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
-      <h2 className="font-display text-xl text-foreground">Destinos mais vendidos</h2>
+      <h2 className="font-display text-xl text-foreground">{titulo}</h2>
       {dados.length === 0 ? (
         <p className="mt-4 text-sm text-muted-foreground">Sem viagens vendidas ainda.</p>
       ) : (
@@ -494,6 +555,53 @@ function UltimasAtividades({
                   })}
                 </p>
               </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PacotesAtencao({
+  dados,
+}: {
+  dados: {
+    id_pacote: number;
+    nome_pacote: string;
+    status: string;
+    destino: string | null;
+    estado_sigla: string | null;
+  }[];
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6">
+      <h2 className="font-display text-xl text-foreground">Pacotes precisando de atenção</h2>
+      {dados.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Nenhum pacote em rascunho ou revisão — catálogo em dia.
+        </p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {dados.map((p) => (
+            <li key={p.id_pacote}>
+              <Link
+                to="/painel/pacotes"
+                className="flex items-center gap-3 rounded-lg -mx-2 px-2 py-1 hover:bg-muted"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gold/15 text-gold">
+                  <PenLine className="h-3.5 w-3.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{p.nome_pacote}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {p.destino ? `${p.destino} · ${p.estado_sigla}` : "Destino a definir"}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {p.status}
+                </span>
+              </Link>
             </li>
           ))}
         </ul>

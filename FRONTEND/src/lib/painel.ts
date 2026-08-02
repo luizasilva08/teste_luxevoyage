@@ -40,6 +40,14 @@ export type AtividadeRecente = {
   consultor_nome: string | null;
 };
 
+export type PacoteAtencao = {
+  id_pacote: number;
+  nome_pacote: string;
+  status: string;
+  destino: string | null;
+  estado_sigla: string | null;
+};
+
 export type Dashboard = {
   escopo: "comercial" | "operacional";
   metricas: Record<string, number>;
@@ -47,6 +55,7 @@ export type Dashboard = {
   funil?: { rotulo: string; total: number }[];
   propostas_status?: { rotulo: string; total: number }[];
   pacotes_status?: { rotulo: string; total: number }[];
+  pacotes_atencao?: PacoteAtencao[];
   receita_mes?: ReceitaMes;
   destinos_mais_vendidos?: DestinoVendido[];
   viagens_por_estado?: ViagensPorEstado[];
@@ -104,13 +113,18 @@ export function atualizarOportunidade(
   return apiFetch(`/api/CRM/Oportunidade_CRM/${id}`, { method: "PUT", body: campos });
 }
 
+// Precisam bater EXATAMENTE com os valores gravados em
+// Oportunidade_CRM.estagio_funil (ver DATA/BLOCO 3/03_inserts.sql) --
+// não é um enum fixo no banco (a coluna é só VARCHAR(50)), então esta
+// lista existe pra manter o Kanban e o formulário usando sempre o
+// mesmo vocabulário do dado real, e não outro nome que pareça certo.
 export const ESTAGIOS_FUNIL = [
-  "Novo Lead",
-  "Contato Iniciado",
+  "Prospecção",
+  "Qualificação",
   "Proposta Enviada",
   "Negociação",
-  "Fechado",
-  "Perdido",
+  "Fechamento Ganho",
+  "Fechamento Perdido",
 ] as const;
 
 // --- Clientes ------------------------------------------------------------

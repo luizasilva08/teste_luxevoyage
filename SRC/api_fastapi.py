@@ -421,6 +421,55 @@ def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
         ),
     }
 
+    # Cadeia até o destino de verdade: Viagem -> Contrato_Digital ->
+    # Propostas_Comerciais -> Cotacao_Personalizadas -> Pacote ->
+    # Municipio -> Estado. Mesma cadeia usada em /api/painel/viagens, só
+    # que agregada em vez de listada linha a linha. Usada tanto pelo
+    # escopo comercial quanto pelo operacional — é volume de viagem/
+    # destino, não dado financeiro, então serve pros dois.
+    _CADEIA_VIAGEM_DESTINO = """
+        FROM Viagem v
+        JOIN Contrato_Digital cd ON cd.id_contrato = v.id_contrato
+        JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
+        JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+        LEFT JOIN Pacote pa ON pa.id_pacote = co.id_pacote
+        LEFT JOIN Municipio m ON m.id_municipio = pa.id_municipio_destino
+        LEFT JOIN Estado e ON e.id_estado = m.id_estado
+    """
+
+    resposta["viagens_por_estado"] = agrupar(
+        f"""
+        SELECT e.sigla AS estado_sigla, COUNT(*) AS total
+        {_CADEIA_VIAGEM_DESTINO}
+        WHERE e.sigla IS NOT NULL
+        GROUP BY e.sigla
+        """
+    )
+
+    resposta["proximos_embarques"] = agrupar(
+        f"""
+        SELECT v.id_viagem, v.data_embarque, cl.nome AS cliente_nome,
+               pa.nome_pacote, m.nome AS destino, e.sigla AS estado_sigla
+        {_CADEIA_VIAGEM_DESTINO}
+        JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
+        JOIN Cliente cl ON cl.id_cliente = op.id_cliente
+        WHERE v.data_embarque >= CURDATE() AND v.status_viagem IN ('Confirmada', 'Em Andamento')
+        ORDER BY v.data_embarque ASC
+        LIMIT 4
+        """
+    )
+
+    resposta["destinos_mais_vendidos"] = agrupar(
+        f"""
+        SELECT m.nome AS destino, e.sigla AS estado_sigla, COUNT(*) AS total
+        {_CADEIA_VIAGEM_DESTINO}
+        WHERE m.nome IS NOT NULL
+        GROUP BY m.id_municipio, m.nome, e.sigla
+        ORDER BY total DESC
+        LIMIT 5
+        """
+    )
+
     if nivel in ("Admin", "Gerente"):
         resposta["funil"] = agrupar(
             "SELECT estagio_funil AS rotulo, COUNT(*) AS total "
@@ -430,20 +479,6 @@ def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
             "SELECT status AS rotulo, COUNT(*) AS total "
             "FROM Propostas_Comerciais GROUP BY status"
         )
-
-        # Cadeia até o destino de verdade: Viagem -> Contrato_Digital ->
-        # Propostas_Comerciais -> Cotacao_Personalizadas -> Pacote ->
-        # Municipio -> Estado. Mesma cadeia usada em /api/painel/viagens,
-        # só que agregada em vez de listada linha a linha.
-        _CADEIA_VIAGEM_DESTINO = """
-            FROM Viagem v
-            JOIN Contrato_Digital cd ON cd.id_contrato = v.id_contrato
-            JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
-            JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
-            LEFT JOIN Pacote pa ON pa.id_pacote = co.id_pacote
-            LEFT JOIN Municipio m ON m.id_municipio = pa.id_municipio_destino
-            LEFT JOIN Estado e ON e.id_estado = m.id_estado
-        """
 
         receita = agrupar(
             f"""
@@ -462,39 +497,6 @@ def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
             r["ticket_medio"] = float(r["confirmada"]) / total_viagens if total_viagens else 0.0
             resposta["receita_mes"] = r
 
-        resposta["destinos_mais_vendidos"] = agrupar(
-            f"""
-            SELECT m.nome AS destino, e.sigla AS estado_sigla, COUNT(*) AS total
-            {_CADEIA_VIAGEM_DESTINO}
-            WHERE m.nome IS NOT NULL
-            GROUP BY m.id_municipio, m.nome, e.sigla
-            ORDER BY total DESC
-            LIMIT 5
-            """
-        )
-
-        resposta["viagens_por_estado"] = agrupar(
-            f"""
-            SELECT e.sigla AS estado_sigla, COUNT(*) AS total
-            {_CADEIA_VIAGEM_DESTINO}
-            WHERE e.sigla IS NOT NULL
-            GROUP BY e.sigla
-            """
-        )
-
-        resposta["proximos_embarques"] = agrupar(
-            f"""
-            SELECT v.id_viagem, v.data_embarque, cl.nome AS cliente_nome,
-                   pa.nome_pacote, m.nome AS destino, e.sigla AS estado_sigla
-            {_CADEIA_VIAGEM_DESTINO}
-            JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
-            JOIN Cliente cl ON cl.id_cliente = op.id_cliente
-            WHERE v.data_embarque >= CURDATE() AND v.status_viagem IN ('Confirmada', 'Em Andamento')
-            ORDER BY v.data_embarque ASC
-            LIMIT 4
-            """
-        )
-
         resposta["atividades_recentes"] = agrupar(
             """
             SELECT hi.id_interacao, hi.tipo_interacao, hi.data_interacao,
@@ -509,6 +511,19 @@ def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
     else:  # Operacoes
         resposta["pacotes_status"] = agrupar(
             "SELECT status AS rotulo, COUNT(*) AS total FROM Pacote GROUP BY status"
+        )
+        # Pacotes ainda não publicados — é o "o que falta fazer" de quem
+        # monta o catálogo, sem nenhum dado comercial/financeiro junto.
+        resposta["pacotes_atencao"] = agrupar(
+            """
+            SELECT p.id_pacote, p.nome_pacote, p.status, m.nome AS destino, e.sigla AS estado_sigla
+            FROM Pacote p
+            LEFT JOIN Municipio m ON m.id_municipio = p.id_municipio_destino
+            LEFT JOIN Estado e ON e.id_estado = m.id_estado
+            WHERE p.status IN ('Rascunho', 'Em Revisão')
+            ORDER BY p.id_pacote DESC
+            LIMIT 6
+            """
         )
 
     return _json(resposta)

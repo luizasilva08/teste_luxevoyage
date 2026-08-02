@@ -50,7 +50,7 @@ RELATORIOS = [
         "niveis": ("Admin", "Gerente", "Vendedor"),
         "sql": """
             SELECT u.nome AS consultor, COUNT(*) AS total_oportunidades,
-                   SUM(CASE WHEN o.estagio_funil = 'Fechado' THEN 1 ELSE 0 END) AS fechadas,
+                   SUM(CASE WHEN o.estagio_funil = 'Fechamento Ganho' THEN 1 ELSE 0 END) AS fechadas,
                    SUM(o.valor_estimado) AS valor_total_estimado
             FROM Oportunidade_CRM o
             JOIN Usuario_Interno u ON u.id_usuario_interno = o.id_usuario_interno
@@ -100,7 +100,7 @@ RELATORIOS = [
             FROM Usuario_Interno u
             LEFT JOIN Oportunidade_CRM o
                    ON o.id_usuario_interno = u.id_usuario_interno
-                  AND o.estagio_funil NOT IN ('Fechado', 'Perdido')
+                  AND o.estagio_funil NOT IN ('Fechamento Ganho', 'Fechamento Perdido')
             WHERE u.nivel_acesso = 'Vendedor'
             GROUP BY u.id_usuario_interno, u.nome, u.cargo
             ORDER BY oportunidades_em_aberto DESC

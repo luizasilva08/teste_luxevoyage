@@ -122,8 +122,31 @@ function RelatoriosPage() {
   );
 }
 
-function formatarCelula(v: unknown): string {
+// Nenhuma coluna de relatório vem marcada como "isso é dinheiro" pelo
+// back-end (relatorios.py só devolve linhas cruas do SQL) — então o
+// jeito de saber é pelo NOME da coluna, seguindo a mesma convenção que
+// todo relatorios.py já usa: todo valor monetário tem "valor", "preco"
+// ou "ticket" no nome (valor_estimado, valor_total_calculado,
+// preco_medio, ticket_medio_pacote, etc.). Formata só se, além do nome
+// bater, o dado realmente for numérico — não força formatação em cima
+// de coisa que não é número.
+const PADRAO_COLUNA_MONETARIA = /valor|preco|preço|ticket/i;
+
+const formatadorReal = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+function ehColunaMonetaria(nomeColuna: string): boolean {
+  return PADRAO_COLUNA_MONETARIA.test(nomeColuna);
+}
+
+function formatarCelula(coluna: string, v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
+  if (ehColunaMonetaria(coluna)) {
+    const numero = typeof v === "number" ? v : Number(v);
+    if (!Number.isNaN(numero)) return formatadorReal.format(numero);
+  }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
@@ -149,8 +172,11 @@ function TabelaResultado({ registros }: { registros: Record<string, unknown>[] }
           {registros.map((r, i) => (
             <tr key={i} className="border-t border-border">
               {colunas.map((c) => (
-                <td key={c} className="whitespace-nowrap px-4 py-2.5 text-foreground">
-                  {formatarCelula(r[c])}
+                <td
+                  key={c}
+                  className={`whitespace-nowrap px-4 py-2.5 text-foreground ${ehColunaMonetaria(c) ? "font-medium tabular-nums" : ""}`}
+                >
+                  {formatarCelula(c, r[c])}
                 </td>
               ))}
             </tr>
