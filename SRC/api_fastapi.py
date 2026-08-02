@@ -149,11 +149,13 @@ def _chamar(funcao, *args, **kwargs):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Erro cru do MySQL quando um DELETE esbarra numa FK de outra tabela:
+# Erro cru do banco quando um DELETE esbarra numa FK de outra tabela:
 # "... a foreign key constraint fails (`banco`.`tabela_dependente`, CONSTRAINT ...)"
+# O identificador vem entre crase (padrão MySQL) OU aspas duplas (quando a
+# sessão está em modo ANSI_QUOTES, como no Aiven) — aceita os dois.
 # O grupo capturado é o nome físico da tabela que ainda tem registros apontando
 # pro que se tentou excluir.
-_PADRAO_FK_AO_EXCLUIR = re.compile(r"constraint fails \(`[^`]+`\.`([^`]+)`")
+_PADRAO_FK_AO_EXCLUIR = re.compile(r"""constraint fails \([`"][^`".]+[`"]\.[`"]([^`"]+)[`"]""")
 
 
 def _tabela_por_nome_fisico(nome_fisico: str):
@@ -427,6 +429,82 @@ def api_dashboard(usuario_atual: dict = Depends(obter_usuario_atual)):
         resposta["propostas_status"] = agrupar(
             "SELECT status AS rotulo, COUNT(*) AS total "
             "FROM Propostas_Comerciais GROUP BY status"
+        )
+
+        # Cadeia até o destino de verdade: Viagem -> Contrato_Digital ->
+        # Propostas_Comerciais -> Cotacao_Personalizadas -> Pacote ->
+        # Municipio -> Estado. Mesma cadeia usada em /api/painel/viagens,
+        # só que agregada em vez de listada linha a linha.
+        _CADEIA_VIAGEM_DESTINO = """
+            FROM Viagem v
+            JOIN Contrato_Digital cd ON cd.id_contrato = v.id_contrato
+            JOIN Propostas_Comerciais pr ON pr.id_proposta = cd.id_proposta
+            JOIN Cotacao_Personalizadas co ON co.id_cotacao = pr.id_cotacao
+            LEFT JOIN Pacote pa ON pa.id_pacote = co.id_pacote
+            LEFT JOIN Municipio m ON m.id_municipio = pa.id_municipio_destino
+            LEFT JOIN Estado e ON e.id_estado = m.id_estado
+        """
+
+        receita = agrupar(
+            f"""
+            SELECT
+                COALESCE(SUM(pg.valor_total), 0) AS prevista,
+                COALESCE(SUM(CASE WHEN pg.status_transacao = 'Confirmado' THEN pg.valor_total ELSE 0 END), 0) AS confirmada,
+                COUNT(DISTINCT v.id_viagem) AS total_viagens
+            {_CADEIA_VIAGEM_DESTINO}
+            JOIN Pagamento_Contrato pg ON pg.id_contrato = v.id_contrato
+            WHERE MONTH(v.data_embarque) = MONTH(CURDATE()) AND YEAR(v.data_embarque) = YEAR(CURDATE())
+            """
+        )
+        if receita:
+            r = receita[0]
+            total_viagens = r["total_viagens"] or 0
+            r["ticket_medio"] = float(r["confirmada"]) / total_viagens if total_viagens else 0.0
+            resposta["receita_mes"] = r
+
+        resposta["destinos_mais_vendidos"] = agrupar(
+            f"""
+            SELECT m.nome AS destino, e.sigla AS estado_sigla, COUNT(*) AS total
+            {_CADEIA_VIAGEM_DESTINO}
+            WHERE m.nome IS NOT NULL
+            GROUP BY m.id_municipio, m.nome, e.sigla
+            ORDER BY total DESC
+            LIMIT 5
+            """
+        )
+
+        resposta["viagens_por_estado"] = agrupar(
+            f"""
+            SELECT e.sigla AS estado_sigla, COUNT(*) AS total
+            {_CADEIA_VIAGEM_DESTINO}
+            WHERE e.sigla IS NOT NULL
+            GROUP BY e.sigla
+            """
+        )
+
+        resposta["proximos_embarques"] = agrupar(
+            f"""
+            SELECT v.id_viagem, v.data_embarque, cl.nome AS cliente_nome,
+                   pa.nome_pacote, m.nome AS destino, e.sigla AS estado_sigla
+            {_CADEIA_VIAGEM_DESTINO}
+            JOIN Oportunidade_CRM op ON op.id_oportunidade = co.id_oportunidade
+            JOIN Cliente cl ON cl.id_cliente = op.id_cliente
+            WHERE v.data_embarque >= CURDATE() AND v.status_viagem IN ('Confirmada', 'Em Andamento')
+            ORDER BY v.data_embarque ASC
+            LIMIT 4
+            """
+        )
+
+        resposta["atividades_recentes"] = agrupar(
+            """
+            SELECT hi.id_interacao, hi.tipo_interacao, hi.data_interacao,
+                   cl.nome AS cliente_nome, u.nome AS consultor_nome
+            FROM Historico_Interacoes hi
+            LEFT JOIN Cliente cl ON cl.id_cliente = hi.id_cliente
+            LEFT JOIN Usuario_Interno u ON u.id_usuario_interno = hi.id_usuario_interno
+            ORDER BY hi.data_interacao DESC
+            LIMIT 8
+            """
         )
     else:  # Operacoes
         resposta["pacotes_status"] = agrupar(

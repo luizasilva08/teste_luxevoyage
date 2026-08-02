@@ -12,6 +12,34 @@ import { apiFetch } from "./api";
 // Admin/Gerente recebem "funil" e "propostas_status" (visão comercial);
 // Operações recebe "pacotes_status" (visão operacional/catálogo) — por
 // isso os três são opcionais aqui.
+export type ReceitaMes = {
+  prevista: number;
+  confirmada: number;
+  total_viagens: number;
+  ticket_medio: number;
+};
+
+export type DestinoVendido = { destino: string; estado_sigla: string; total: number };
+
+export type ViagensPorEstado = { estado_sigla: string; total: number };
+
+export type ProximoEmbarque = {
+  id_viagem: number;
+  data_embarque: string;
+  cliente_nome: string;
+  nome_pacote: string | null;
+  destino: string | null;
+  estado_sigla: string | null;
+};
+
+export type AtividadeRecente = {
+  id_interacao: number;
+  tipo_interacao: string;
+  data_interacao: string;
+  cliente_nome: string | null;
+  consultor_nome: string | null;
+};
+
 export type Dashboard = {
   escopo: "comercial" | "operacional";
   metricas: Record<string, number>;
@@ -19,6 +47,11 @@ export type Dashboard = {
   funil?: { rotulo: string; total: number }[];
   propostas_status?: { rotulo: string; total: number }[];
   pacotes_status?: { rotulo: string; total: number }[];
+  receita_mes?: ReceitaMes;
+  destinos_mais_vendidos?: DestinoVendido[];
+  viagens_por_estado?: ViagensPorEstado[];
+  proximos_embarques?: ProximoEmbarque[];
+  atividades_recentes?: AtividadeRecente[];
 };
 
 export function getDashboard(): Promise<Dashboard> {
